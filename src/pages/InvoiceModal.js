@@ -462,7 +462,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                     </td>
                     <td style={{ border:'1px solid #555', verticalAlign:'top', padding:5 }}>
                       <div style={{ background:'#ffff00', fontWeight:'bold', fontSize:11, textAlign:'center', padding:'3px 0', marginBottom:4 }}>
-                        Shipped T
+                        Shipped To
                       </div>
                       <div style={{ marginBottom:2, fontSize:8.5, display:'flex', alignItems:'center', gap:5 }}>
                         <strong>Name :</strong>
