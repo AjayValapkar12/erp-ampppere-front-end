@@ -356,12 +356,12 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                 <tbody><tr>
                   <td style={{ border:'none', verticalAlign:'top' }}>
                     <div style={{ display:'flex', alignItems:'flex-end', gap:4 }}>
-                      <span style={{ fontSize:20, fontStyle:'italic', fontWeight:200, color:'#999', lineHeight:1 }}>/</span>
+                      <img src="/assets/amp-logo.png" alt="AMP company logo" style={{ height:42, width:'auto', objectFit:'contain', display:'block' }} />
                       <div>
-                        <div style={{ fontSize:28, fontWeight:900, color:'#cc0000', letterSpacing:0.5, lineHeight:1 }}>
-                          <em>A</em>MPPERE CABLE
+                        <div style={{ fontSize:32, fontWeight:900, color:'#cc0000', letterSpacing:0.5, lineHeight:1 }}>
+                          AMPPERE CABLE
                         </div>
-                        <div style={{ fontSize:8, fontStyle:'italic', fontWeight:700, color:'#333', marginTop:1 }}>
+                        <div style={{ fontSize:12, fontStyle:'italic', fontWeight:700, color:'#333', marginTop:1 }}>
                           Where Quality Meets Reliability
                         </div>
                       </div>
@@ -374,11 +374,10 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                     </div>
                   </td>
                   <td style={{ border:'none', verticalAlign:'top', textAlign:'right', width:165 }}>
-                    <div style={{ display:'flex', gap:4, justifyContent:'flex-end', alignItems:'center' }}>
-                      <div style={{ border:'2px solid #555', borderRadius:3, padding:'2px 5px', fontSize:10, fontWeight:'bold' }}>C<span style={{ fontSize:13 }}>€</span></div>
-                      <div style={{ border:'2px solid #2e7d32', borderRadius:3, padding:'2px 5px', fontSize:7.5, fontWeight:'bold', color:'#2e7d32', lineHeight:1.2 }}>RoHS<br/><span style={{ fontSize:6.5 }}>Compliant</span></div>
-                      <div style={{ border:'3px solid #b71c1c', borderRadius:'50%', padding:'3px 7px', fontSize:11, fontWeight:900, color:'#b71c1c' }}>UL</div>
-                      <div style={{ border:'2px solid #e65100', borderRadius:3, padding:'2px 4px', fontSize:6, fontWeight:'bold', textAlign:'center', color:'#e65100', lineHeight:1.3 }}>CERTIFIED<br/>ISO<br/>9001:2015</div>
+                    <div style={{ display:'flex', gap:5, justifyContent:'flex-end', alignItems:'center' }}>
+                      <img src="/assets/rohs.jpg" alt="RoHS" style={{ height:52, width:'auto', objectFit:'contain', display:'block' }} />
+                      <img src="/assets/iso.png" alt="ISO 9001:2015" style={{ height:52, width:'auto', objectFit:'contain', display:'block' }} />
+                      <img src="/assets/UL.jpeg" alt="UL" style={{ height:52, width:'auto', objectFit:'contain', display:'block' }} />
                     </div>
                   </td>
                 </tr></tbody>
@@ -440,7 +439,9 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                   {/* Billed To / Delivery At */}
                   <tr>
                     <td style={{ border:'1px solid #555', verticalAlign:'top', padding:5 }}>
-                      <div style={{ fontWeight:'bold', fontSize:10, marginBottom:4, textDecoration:'underline' }}>Billed To</div>
+                      <div style={{ background:'#e1e1e1', fontWeight:'bold', fontSize:11, textAlign:'center', padding:'3px 0', marginBottom:4 }}>
+                        Billed To
+                      </div>
                       <div style={{ marginBottom:2, fontSize:8.5, display:'flex', alignItems:'center', gap:5 }}>
                         <strong>Name :</strong>
                         <EF val={invoice.billedTo?.name} onChange={v=>setF('billedTo.name',v)} editMode={em} w={200}/>
@@ -461,7 +462,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                     </td>
                     <td style={{ border:'1px solid #555', verticalAlign:'top', padding:5 }}>
                       <div style={{ background:'#ffff00', fontWeight:'bold', fontSize:11, textAlign:'center', padding:'3px 0', marginBottom:4 }}>
-                        DELIVERY AT
+                        Shipped T
                       </div>
                       <div style={{ marginBottom:2, fontSize:8.5, display:'flex', alignItems:'center', gap:5 }}>
                         <strong>Name :</strong>
