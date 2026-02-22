@@ -23,7 +23,7 @@ function ItemAutocomplete({ value, onChange, onSelect, placeholder = 'Item descr
   const fetchSuggestions = useCallback(async (q) => {
     setLoading(true);
     try {
-      const res = await api.get('/sales-orders/item-suggestions', { params: { q } });
+      const res = await api.get('/sales/item-suggestions', { params: { q } });
       setSuggestions(res.data.data || []);
     } catch {
       setSuggestions([]);
@@ -504,7 +504,7 @@ export default function Sales() {
                   </button>
                 </div>
 
-                <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                <div className=" border border-gray-100 rounded-xl">
                   <table className="w-full min-w-[720px]">
                     <thead className="bg-gray-50">
                       <tr>
@@ -518,9 +518,9 @@ export default function Sales() {
                         const amt = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
                         const gst = (amt * (parseFloat(item.gstRate) || 0)) / 100;
                         return (
-                          <tr key={idx} className="border-b border-gray-50 last:border-0">
+                          <tr key={idx} className="border-b border-gray-50 last:border-0 z-50">
                             {/* Description with autocomplete */}
-                            <td className="px-2 py-2 min-w-[200px]">
+                            <td className="px-2 py-2 min-w-[200px] z-40">
                               <ItemAutocomplete
                                 value={item.description}
                                 onChange={v => updateItem(idx, 'description', v)}
