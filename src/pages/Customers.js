@@ -50,6 +50,9 @@ export default function Customers() {
   const [error, setError]                   = useState('');
   const [syncing, setSyncing]               = useState(false);
 
+  // ── "Same as Billing" checkbox state ───────────────────────────────────────
+  const [sameAsBilling, setSameAsBilling]   = useState(false);
+
   const emptyForm = {
     name: '', email: '', phone: '', contactPerson: '', gstNumber: '',
     billingAddress:  { street: '', city: '', state: '', pincode: '' },
@@ -79,7 +82,11 @@ export default function Customers() {
   // ── Open helpers ────────────────────────────────────────────────────────────
 
   const openCreate = () => {
-    setEditCustomer(null); setForm(emptyForm); setError(''); setShowModal(true);
+    setEditCustomer(null);
+    setForm(emptyForm);
+    setSameAsBilling(false);
+    setError('');
+    setShowModal(true);
   };
 
   const openEdit = (c) => {
@@ -93,7 +100,9 @@ export default function Customers() {
       billingAddress:  c.billingAddress  || emptyForm.billingAddress,
       deliveryAddress: c.deliveryAddress || emptyForm.deliveryAddress,
     });
-    setError(''); setShowModal(true);
+    setSameAsBilling(false);
+    setError('');
+    setShowModal(true);
   };
 
   const openLedger = async (c) => {
@@ -169,7 +178,6 @@ export default function Customers() {
     setSaving(true); setError('');
     try {
       const res = await api.post(`/customers/${payCustomer._id}/payment`, payForm);
-      // Update the customer row in state with fresh balance
       setCustomers(c => c.map(x => x._id === payCustomer._id ? res.data.data : x));
       setShowPayModal(false);
     } catch (e) {
@@ -179,10 +187,26 @@ export default function Customers() {
     }
   };
 
-  // ── Address form helper ─────────────────────────────────────────────────────
+  // ── Address form helpers ────────────────────────────────────────────────────
 
-  const setAddr = (type, field, val) =>
+  // If user manually edits delivery address, uncheck "same as billing"
+  const setAddr = (type, field, val) => {
+    if (type === 'deliveryAddress') setSameAsBilling(false);
     setForm(f => ({ ...f, [type]: { ...f[type], [field]: val } }));
+  };
+
+  // Toggle "same as billing" checkbox
+  const handleSameAsBilling = (e) => {
+    const checked = e.target.checked;
+    setSameAsBilling(checked);
+    if (checked) {
+      // Copy billing → delivery
+      setForm(f => ({ ...f, deliveryAddress: { ...f.billingAddress } }));
+    } else {
+      // Clear delivery
+      setForm(f => ({ ...f, deliveryAddress: { street: '', city: '', state: '', pincode: '' } }));
+    }
+  };
 
   const addrSection = (title, type) => (
     <div className="mt-4">
@@ -295,7 +319,6 @@ export default function Customers() {
                           onClick={() => openEdit(c)}
                           className="p-1.5 rounded-lg border border-gray-100 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition"
                         ><Edit2 size={14}/></button>
-                        {/* Receive payment from this customer */}
                         <button
                           title="Receive Payment"
                           onClick={() => openPay(c)}
@@ -325,8 +348,10 @@ export default function Customers() {
               <h2 className="text-lg font-bold text-gray-900">{editCustomer ? 'Edit Customer' : 'Add Customer'}</h2>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition"><X size={18}/></button>
             </div>
+
             <div className="px-6 py-5 space-y-4">
               {error && <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">{error}</div>}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputField label="Customer Name" required value={form.name} placeholder="M/s. Company Name"
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/>
@@ -337,11 +362,39 @@ export default function Customers() {
                 <InputField label="Contact Person" value={form.contactPerson}
                   onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))}/>
               </div>
+
               <InputField label="GST Number" value={form.gstNumber} placeholder="27XXXXX1234X1Z5"
                 onChange={e => setForm(f => ({ ...f, gstNumber: e.target.value }))}/>
+
+              {/* ── Billing Address ── */}
               {addrSection('Billing Address', 'billingAddress')}
+
+              {/* ── Same as Billing Checkbox ── */}
+              <label className="flex items-center gap-2.5 mt-2 cursor-pointer select-none w-fit group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={sameAsBilling}
+                    onChange={handleSameAsBilling}
+                    className="sr-only peer"
+                  />
+                  <div className="w-4 h-4 border-2 border-gray-300 rounded peer-checked:bg-gray-900 peer-checked:border-gray-900 transition flex items-center justify-center">
+                    {sameAsBilling && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
+                        <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-gray-500 group-hover:text-gray-700 transition">
+                  Delivery address same as billing address
+                </span>
+              </label>
+
+              {/* ── Delivery Address ── */}
               {addrSection('Delivery Address', 'deliveryAddress')}
             </div>
+
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition">Cancel</button>

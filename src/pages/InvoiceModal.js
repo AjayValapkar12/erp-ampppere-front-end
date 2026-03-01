@@ -36,9 +36,6 @@ const getFY = d => {
 };
 
 // ─── Editable field components — defined OUTSIDE main component ───────────────
-// CRITICAL: These must stay outside the parent component.
-// If defined inside, React treats them as new component types on every render,
-// unmounting/remounting them and losing focus after every keystroke.
 
 const EF = ({ val, onChange, editMode, type='text', w, style={} }) => {
   if (!editMode) return <span style={style}>{val || ''}</span>;
@@ -140,17 +137,16 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
     setLoading(true);
     setError('');
     try {
-      // Check if an invoice already exists for this order
       const ex = await api.get(`/invoices/by-order/${order._id}`);
       if (ex.data.data) {
         setInvoice(ex.data.data);
         setOrigInvoice(JSON.parse(JSON.stringify(ex.data.data)));
       } else {
-        // Generate new invoice — backend only includes delivered items
         const gen = await api.post(`/invoices/generate/${order._id}`);
         setInvoice(gen.data.data);
         setOrigInvoice(JSON.parse(JSON.stringify(gen.data.data)));
-        if (onSaved) onSaved();
+        // Pass newly generated invoice back so Sales table updates immediately
+        if (onSaved) onSaved(gen.data.data);
       }
     } catch (e) {
       setError(e.response?.data?.message || 'Failed to load or generate invoice');
@@ -159,7 +155,6 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
     }
   };
 
-  // Recalculate all item GST amounts whenever price, qty, GST rate or MH flag changes
   const recalc = useCallback((inv) => {
     const mh    = inv.saleWithinMaharashtra;
     const items = (inv.items || []).map(item => {
@@ -175,12 +170,11 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
       const igstAmount   = !mh ? (taxableValue * igstRate)/100 : 0;
       return { ...item, totalValue, taxableValue, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount };
     });
-    const subtotal    = items.reduce((s,i) => s + (i.taxableValue||0), 0);
-    const totalGst    = items.reduce((s,i) => s + i.cgstAmount + i.sgstAmount + i.igstAmount, 0);
+    const subtotal = items.reduce((s,i) => s + (i.taxableValue||0), 0);
+    const totalGst = items.reduce((s,i) => s + i.cgstAmount + i.sgstAmount + i.igstAmount, 0);
     return { ...inv, items, subtotal, totalGst, totalAmount: subtotal + totalGst };
   }, []);
 
-  // Set a deep nested field e.g. 'billedTo.name'
   const setF = useCallback((path, value) => {
     setInvoice(prev => {
       const u    = JSON.parse(JSON.stringify(prev));
@@ -188,12 +182,10 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
       let obj    = u;
       for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
       obj[keys[keys.length - 1]] = value;
-      // Recalculate when MH flag or any numeric field changes
       return path === 'saleWithinMaharashtra' ? recalc(u) : u;
     });
   }, [recalc]);
 
-  // Update a single item field and re-run recalc
   const setItem = useCallback((idx, field, value) => {
     setInvoice(prev => {
       const u = JSON.parse(JSON.stringify(prev));
@@ -204,13 +196,18 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
     });
   }, [recalc]);
 
-  // Build a human-readable summary of what changed vs the original
   const buildChangeMsg = (orig, updated) => {
     if (!orig || !updated) return '';
     const msgs = [];
     const od = Number(orig.totalAmount||0), nd = Number(updated.totalAmount||0);
     if (Math.abs(od - nd) > 0.01)
       msgs.push(`Invoice total: ${fmtINR(od)} → ${fmtINR(nd)}`);
+    // Report invoice number change
+    if ((orig.invoiceNumber || '') !== (updated.invoiceNumber || ''))
+      msgs.push(`Invoice No: "${orig.invoiceNumber}" → "${updated.invoiceNumber}"`);
+    // Report PO number change
+    if ((orig.poNumber || '') !== (updated.poNumber || ''))
+      msgs.push(`PO No: "${orig.poNumber}" → "${updated.poNumber}"`);
     (updated.items||[]).forEach((item, i) => {
       const oi = (orig.items||[])[i];
       if (!oi) return;
@@ -228,13 +225,18 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
       const res   = await api.put(`/invoices/${invoice._id}`, invoice);
       const saved = res.data.data;
       const msg   = buildChangeMsg(origInvoice, saved);
+
       setInvoice(saved);
       setOrigInvoice(JSON.parse(JSON.stringify(saved)));
       setEditMode(false);
       setSaveInfo(msg
         ? `✓ Saved. ${msg}. Sales Order & customer balance updated.`
         : '✓ Invoice saved successfully.');
-      if (onSaved) onSaved();
+
+      // ── KEY FIX: pass the full saved invoice back so the parent can
+      // update invoicesMap immediately without waiting for a refetch ──
+      if (onSaved) onSaved(saved);
+
     } catch (e) {
       setError(e.response?.data?.message || 'Failed to save invoice');
     } finally { setSaving(false); }
@@ -273,7 +275,6 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
     </div>
   );
 
-  // ── Error state (no delivered items, or network error) ───────────────────────
   if (!invoice) return (
     <div style={overlayStyle}>
       <div style={{ background:'#fff', padding:32, borderRadius:10, maxWidth:440, textAlign:'center', marginTop:80 }}>
@@ -635,6 +636,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                           <tr>
                             <td colSpan={2} style={{ border:'1px solid #555', padding:'6px 8px', textAlign:'right' }}>
                               <div style={{ fontWeight:'bold', fontSize:11, marginBottom:30 }}>For AMPPERE CABLE</div>
+                              <div style={{ height: '80px' }}> </div>
                               <div style={{ borderTop:'1px solid #333', paddingTop:3 }}>
                                 <div style={{ fontSize:8.5 }}>Authorised Signatory</div>
                                 <div style={{ fontSize:8.5, fontWeight:'bold' }}>Name : Mr. Sandeep Sawant.</div>

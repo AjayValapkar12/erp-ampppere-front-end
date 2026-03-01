@@ -8,9 +8,6 @@ import { formatCurrency, formatDate, formatDateInput } from '../utils/format';
 import InvoiceModal from './InvoiceModal';
 
 // ─── Inline ItemAutocomplete ──────────────────────────────────────────────────
-// Self-contained — no separate file import needed.
-// Fetches suggestions from /api/sales-orders/item-suggestions (debounced).
-// Keyboard navigable: ↑ ↓ Enter Escape.
 
 function ItemAutocomplete({ value, onChange, onSelect, placeholder = 'Item description' }) {
   const [suggestions, setSuggestions] = useState([]);
@@ -39,7 +36,6 @@ function ItemAutocomplete({ value, onChange, onSelect, placeholder = 'Item descr
     return () => clearTimeout(debounceRef.current);
   }, [value, fetchSuggestions]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
@@ -151,30 +147,37 @@ const TotalsBox = ({ subtotal, totalGst, total }) => (
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Sales() {
-  const [orders, setOrders]                   = useState([]);
-  const [customers, setCustomers]             = useState([]);
-  const [search, setSearch]                   = useState('');
-  const [loading, setLoading]                 = useState(true);
-  const [showModal, setShowModal]             = useState(false);
-  const [showViewModal, setShowViewModal]     = useState(false);
-  const [showPayModal, setShowPayModal]       = useState(false);
+  const [orders, setOrders]                     = useState([]);
+  const [customers, setCustomers]               = useState([]);
+  const [search, setSearch]                     = useState('');
+  const [loading, setLoading]                   = useState(true);
+  const [showModal, setShowModal]               = useState(false);
+  const [showViewModal, setShowViewModal]       = useState(false);
+  const [showPayModal, setShowPayModal]         = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [editOrder, setEditOrder]             = useState(null);
-  const [viewOrder, setViewOrder]             = useState(null);
-  const [payOrder, setPayOrder]               = useState(null);
-  const [invoiceOrder, setInvoiceOrder]       = useState(null);
-  const [saving, setSaving]                   = useState(false);
-  const [error, setError]                     = useState('');
+  const [editOrder, setEditOrder]               = useState(null);
+  const [viewOrder, setViewOrder]               = useState(null);
+  const [payOrder, setPayOrder]                 = useState(null);
+  const [invoiceOrder, setInvoiceOrder]         = useState(null);
+  const [saving, setSaving]                     = useState(false);
+  const [error, setError]                       = useState('');
   const [togglingDelivery, setTogglingDelivery] = useState(null);
+
+  // ── Invoice map: { [orderId]: { invoiceNumber, poNumber } } ─────────────────
+  const [invoicesMap, setInvoicesMap] = useState({});
 
   const emptyForm = {
     customer: '', orderDate: formatDateInput(new Date()),
     deliveryDate: '', notes: '', items: [{ ...EMPTY_ITEM }],
   };
-  const [form, setForm]         = useState(emptyForm);
-  const [payForm, setPayForm]   = useState({ amount: '', paymentMethod: 'bank_transfer', transactionId: '', notes: '' });
+  const [form, setForm]       = useState(emptyForm);
+  const [payForm, setPayForm] = useState({ amount: '', paymentMethod: 'bank_transfer', transactionId: '', notes: '' });
 
-  useEffect(() => { loadOrders(); loadCustomers(); }, []);
+  useEffect(() => {
+    loadOrders();
+    loadCustomers();
+    loadInvoicesMap();
+  }, []);
 
   const loadOrders = async () => {
     try {
@@ -188,9 +191,32 @@ export default function Sales() {
     try { const res = await api.get('/customers'); setCustomers(res.data.data); } catch {}
   };
 
+  // Fetch all invoices once and build a map keyed by orderId
+  const loadInvoicesMap = async () => {
+    try {
+      const res = await api.get('/invoices');
+      const map = {};
+      (res.data.data || []).forEach(inv => {
+        // inv.salesOrder may be an id string or populated object
+        const orderId = inv.salesOrder?._id || inv.salesOrder;
+        if (orderId) {
+          map[orderId] = {
+            invoiceNumber: inv.invoiceNumber || '—',
+            poNumber:      inv.poNumber      || '—',
+          };
+        }
+      });
+      setInvoicesMap(map);
+    } catch {
+      // Invoices endpoint may not exist yet — fail silently
+    }
+  };
+
   const filtered = orders.filter(o =>
     o.orderNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    o.customer?.name?.toLowerCase().includes(search.toLowerCase())
+    o.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    (invoicesMap[o._id]?.invoiceNumber || '').toLowerCase().includes(search.toLowerCase()) ||
+    (invoicesMap[o._id]?.poNumber      || '').toLowerCase().includes(search.toLowerCase())
   );
 
   // ── Open helpers ────────────────────────────────────────────────────────────
@@ -250,7 +276,6 @@ export default function Sales() {
     });
   };
 
-  // Called when autocomplete suggestion is picked — auto-fills sibling fields
   const applyItemSuggestion = (idx, suggestion) => {
     setForm(f => {
       const items = [...f.items];
@@ -260,7 +285,6 @@ export default function Sales() {
         hsnCode:     suggestion.hsnCode,
         unit:        suggestion.unit,
         gstRate:     suggestion.gstRate,
-        // Pre-fill rate with last used rate; user can override freely
         rate:        suggestion.lastRate > 0 ? suggestion.lastRate : items[idx].rate,
       };
       return { ...f, items };
@@ -371,7 +395,7 @@ export default function Sales() {
             <Search size={15} className="text-gray-400 flex-shrink-0" />
             <input
               className="flex-1 bg-transparent text-sm outline-none text-gray-700 placeholder-gray-400"
-              placeholder="Search by customer or order number..."
+              placeholder="Search by customer, invoice no, or PO no..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -379,27 +403,62 @@ export default function Sales() {
           </div>
 
           <div className="overflow-x-auto -mx-5">
-            <table className="w-full min-w-[800px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="border-b border-gray-100">
-                  {['Order #','Customer','Total','Paid','Outstanding','Payment','Delivery','Date','Actions'].map(h => (
+                  {[
+                    'Invoice #',
+                    'PO #',
+                    'Customer',
+                    'Total',
+                    'Paid',
+                    'Outstanding',
+                    'Payment',
+                    'Delivery',
+                    'Date',
+                    'Actions',
+                  ].map(h => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td colSpan={9} className="text-center py-12 text-gray-400 text-sm">Loading...</td></tr>
+                  <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">Loading...</td></tr>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={9} className="text-center py-12 text-gray-400 text-sm">No orders found</td></tr>
+                  <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">No orders found</td></tr>
                 )}
                 {filtered.map(order => {
                   const deliveredCount = order.items?.filter(i => i.isDelivered).length || 0;
                   const totalItems     = order.items?.length || 0;
+                  const inv            = invoicesMap[order._id];
+
                   return (
                     <tr key={order._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
-                      <td className="px-5 py-3.5 font-mono text-xs text-gray-600 whitespace-nowrap">{order.orderNumber}</td>
+
+                      {/* ── Invoice # ── */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        {inv?.invoiceNumber ? (
+                          <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                            {inv.invoiceNumber}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300 italic">No invoice</span>
+                        )}
+                      </td>
+
+                      {/* ── PO # ── */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        {inv?.poNumber && inv.poNumber !== '—' ? (
+                          <span className="font-mono text-xs text-gray-700">
+                            {inv.poNumber}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+
                       <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[130px] truncate">{order.customer?.name}</td>
                       <td className="px-5 py-3.5 text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
                       <td className="px-5 py-3.5 text-sm text-green-600 font-medium whitespace-nowrap">{formatCurrency(order.paidAmount)}</td>
@@ -471,7 +530,6 @@ export default function Sales() {
                 <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">{error}</div>
               )}
 
-              {/* Order meta */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Customer *</label>
@@ -494,7 +552,6 @@ export default function Sales() {
                 </div>
               </div>
 
-              {/* Items table */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-bold text-gray-900">Order Items</span>
@@ -504,7 +561,7 @@ export default function Sales() {
                   </button>
                 </div>
 
-                <div className=" border border-gray-100 rounded-xl">
+                <div className="border border-gray-100 rounded-xl">
                   <table className="w-full min-w-[720px]">
                     <thead className="bg-gray-50">
                       <tr>
@@ -519,7 +576,6 @@ export default function Sales() {
                         const gst = (amt * (parseFloat(item.gstRate) || 0)) / 100;
                         return (
                           <tr key={idx} className="border-b border-gray-50 last:border-0 z-50">
-                            {/* Description with autocomplete */}
                             <td className="px-2 py-2 min-w-[200px] z-40">
                               <ItemAutocomplete
                                 value={item.description}
@@ -592,7 +648,22 @@ export default function Sales() {
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-10 bg-black/40 overflow-y-auto">
           <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl my-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">Order: {viewOrder.orderNumber}</h2>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Order: {viewOrder.orderNumber}</h2>
+                {/* Show invoice & PO info if available */}
+                {invoicesMap[viewOrder._id] && (
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-gray-500">
+                      Invoice: <span className="font-semibold text-blue-700">{invoicesMap[viewOrder._id].invoiceNumber}</span>
+                    </span>
+                    {invoicesMap[viewOrder._id].poNumber !== '—' && (
+                      <span className="text-xs text-gray-500">
+                        PO: <span className="font-semibold text-gray-700">{invoicesMap[viewOrder._id].poNumber}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setShowViewModal(false); openInvoice(viewOrder); }}
@@ -624,7 +695,7 @@ export default function Sales() {
               <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Items &amp; Delivery Status</h3>
               <div className="space-y-3 mb-5">
                 {viewOrder.items.map(item => {
-                  const key       = `${viewOrder._id}-${item._id}`;
+                  const key        = `${viewOrder._id}-${item._id}`;
                   const isToggling = togglingDelivery === key;
                   const amt        = item.amount || (item.quantity * item.rate);
                   const gst        = item.gstAmount || ((amt * item.gstRate) / 100);
@@ -750,7 +821,26 @@ export default function Sales() {
         <InvoiceModal
           order={invoiceOrder}
           onClose={() => { setShowInvoiceModal(false); setInvoiceOrder(null); }}
-          onSaved={loadOrders}
+          onSaved={(savedInvoice) => {
+            loadOrders();
+            if (savedInvoice) {
+              // ── Immediately patch invoicesMap with the returned invoice data
+              // so Invoice # and PO # update in the table without a full refetch ──
+              const orderId = savedInvoice.salesOrder?._id || savedInvoice.salesOrder;
+              if (orderId) {
+                setInvoicesMap(prev => ({
+                  ...prev,
+                  [orderId]: {
+                    invoiceNumber: savedInvoice.invoiceNumber || '—',
+                    poNumber:      savedInvoice.poNumber      || '—',
+                  },
+                }));
+              }
+            } else {
+              // Fallback: full refetch if no invoice data returned
+              loadInvoicesMap();
+            }
+          }}
         />
       )}
     </div>
