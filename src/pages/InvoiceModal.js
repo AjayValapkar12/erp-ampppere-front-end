@@ -594,7 +594,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                         <span style={{ background:'#ffff00', fontWeight:'bold', padding:'1px 3px', fontSize:7.5 }}>MSME UDYOG AADHAAR No.: MH17A0040992.(UDYAM-MH-17-0004470.)</span>
                       </div>
                       <div style={{ background:'#ffff00', fontWeight:'bold', padding:'1px 3px', marginBottom:1, fontSize:7.5 }}>AMPPERE CABLE, C.C.ACCOUNT, PUNJAB NATIONAL BANK, BOISAR BRANCH,</div>
-                      <div style={{ background:'#ffff00', fontWeight:'bold', padding:'1px 3px', marginBottom:6, fontSize:7.5 }}>CC A/C. NO. 166340110000158, IFS CODE: PUNB0166310. Mo.No: 9370946510</div>
+                      <div style={{ background:'#ffff00', fontWeight:'bold', padding:'1px 3px', marginBottom:6, fontSize:7.5 }}>CC A/C. NO. 16634011000158, IFS CODE: PUNB0166310. Mo.No: 9370946510</div>
                       <div style={{ borderTop:'1px solid #ccc', paddingTop:4 }}>
                         <div style={{ fontSize:7.5, marginBottom:2, fontWeight:'bold' }}>Amount of Tax subject to Reverse Charge</div>
                         <div style={{ fontSize:7, marginBottom:3 }}>Certified that the particulars given above and the amount indicated are true and correct</div>
