@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { FileText, TrendingUp, TrendingDown, Users, Search } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, Users, Search, Download } from 'lucide-react';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, CartesianGrid, XAxis, YAxis } from 'recharts';
 import api from '../utils/api';
 import { formatCurrency, formatDate, formatDateInput } from '../utils/format';
+
+const SALES_CHART_COLORS = ['#1f2937', '#0f766e', '#dc2626', '#d97706', '#2563eb', '#7c3aed'];
 
 const Badge = ({ status }) => {
   const map = { pending:'bg-red-100 text-red-700', partial:'bg-yellow-100 text-yellow-700', paid:'bg-green-100 text-green-700' };
@@ -23,6 +26,40 @@ export default function Reports() {
   const [endDate, setEndDate] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const salesOrderRows = data?.customers
+    ? data.customers.flatMap(c =>
+        (c.orders || []).map(o => ({
+          ...o,
+          customerId: c.customer?._id,
+          customerName: c.customer?.name || '-',
+          customerPhone: c.customer?.phone || '-'
+        }))
+      )
+    : [];
+
+  const topCustomerOutstanding = (data?.customers || [])
+    .slice()
+    .sort((a, b) => (b.outstandingAmount || 0) - (a.outstandingAmount || 0))
+    .slice(0, 6)
+    .map(c => ({
+      name: c.customer?.name || 'Unknown',
+      outstanding: c.outstandingAmount || 0,
+      paid: c.paidAmount || 0
+    }));
+
+  const paymentStatusBreakdown = salesOrderRows.reduce((acc, order) => {
+    const status = order.paymentStatus || 'pending';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const salesStatusChartData = Object.entries(paymentStatusBreakdown).map(([name, value]) => ({
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    value
+  }));
+
+  const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
   const tabs = [
     { key:'pl', label:'P&L Report' },
@@ -49,6 +86,62 @@ export default function Reports() {
       setData(res.data.data);
     } catch(e){ console.error(e); }
     finally { setLoading(false); }
+  };
+
+  const downloadExcel = () => {
+    if (!data) return;
+    
+    let csvContent = '';
+    let filename = '';
+    
+    if (tab === 'sales' && data.customers) {
+      csvContent = 'Customer Name,Phone,Order Number,Order Date,Invoice Number,PO Number,Order Amount,Paid Amount,Outstanding,Payment Status\n';
+      salesOrderRows.forEach(order => {
+        csvContent += [
+          escapeCsv(order.customerName),
+          escapeCsv(order.customerPhone),
+          escapeCsv(order.orderNumber || ''),
+          escapeCsv(order.orderDate ? formatDate(order.orderDate) : ''),
+          escapeCsv(order.invoiceNumber || '-'),
+          escapeCsv(order.poNumber || '-'),
+          order.totalAmount || 0,
+          order.paidAmount || 0,
+          order.outstandingAmount || 0,
+          escapeCsv(order.paymentStatus || '')
+        ].join(',') + '\n';
+      });
+
+      csvContent += '\n';
+      csvContent += 'Customer Summary\n';
+      csvContent += 'Customer Name,Phone,Orders,Total Amount,Paid Amount,Outstanding\n';
+      data.customers.forEach(cust => {
+        csvContent += [
+          escapeCsv(cust.customer?.name || ''),
+          escapeCsv(cust.customer?.phone || ''),
+          cust.orderCount || 0,
+          cust.totalAmount || 0,
+          cust.paidAmount || 0,
+          cust.outstandingAmount || 0
+        ].join(',') + '\n';
+      });
+      filename = 'sales_report.csv';
+    } else if (tab === 'purchases' && data.vendors) {
+      csvContent = 'Vendor Name,Phone,Total Amount,Paid Amount,Outstanding,Order Number,Order Date,Invoice Number,PO Number,Payment Status\n';
+      data.vendors.forEach(vend => {
+        (vend.orders || []).forEach(order => {
+          csvContent += `"${vend.vendor?.name || ''}","${vend.vendor?.phone || ''}",${vend.totalAmount},${vend.paidAmount},${vend.outstandingAmount},"${order.orderNumber}","${order.orderDate ? formatDate(order.orderDate) : ''}","${order.invoiceNumber}","${order.poNumber}","${order.paymentStatus}"\n`;
+        });
+      });
+      filename = 'purchase_report.csv';
+    }
+    
+    if (!csvContent) return;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
   };
 
   const inputCls = "px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:bg-white transition w-full";
@@ -147,50 +240,264 @@ export default function Reports() {
       {/* ── Sales Report ── */}
       {tab==='sales' && data && (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <SummaryCard label="Total Revenue" value={formatCurrency(data.totalRevenue)} />
-            <SummaryCard label="Amount Received" value={<span className="text-green-600">{formatCurrency(data.totalReceived)}</span>} />
-            <SummaryCard label="Outstanding" value={<span className="text-red-500">{formatCurrency(data.totalOutstanding)}</span>} />
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <SummaryCard label="Total Revenue" value={formatCurrency(data.totalRevenue || 0)} />
+            <SummaryCard label="Amount Received" value={<span className="text-green-600">{formatCurrency(data.totalReceived || 0)}</span>} />
+            <SummaryCard label="Outstanding" value={<span className="text-red-500">{formatCurrency(data.totalOutstanding || 0)}</span>} />
+            <SummaryCard label="Total Customers" value={data.customers?.length || 0} />
           </div>
-          <TableWrapper headers={['Order #','Customer','Date','Total','Received','Outstanding','Status']}>
-            {data.orders.length===0&&<tr><td colSpan={7} className="text-center py-12 text-gray-400 text-sm">No orders in selected period</td></tr>}
-            {data.orders.map(o=>(
-              <tr key={o._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
-                <td className="px-5 py-3.5 font-mono text-xs text-gray-600">{o.orderNumber}</td>
-                <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[120px] truncate">{o.customer?.name}</td>
-                <td className="px-5 py-3.5 text-xs text-gray-500">{formatDate(o.orderDate)}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-gray-900">{formatCurrency(o.totalAmount)}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-green-600">{formatCurrency(o.paidAmount)}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-red-600">{formatCurrency(o.outstandingAmount)}</td>
-                <td className="px-5 py-3.5"><Badge status={o.paymentStatus}/></td>
-              </tr>
-            ))}
-          </TableWrapper>
+          
+          {/* Download Button */}
+          <div className="flex justify-end">
+            <button onClick={downloadExcel} disabled={!data || !(data.customers && data.customers.length)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition disabled:opacity-50">
+              <Download size={14}/> Download CSV
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-gray-900">Top Customers by Outstanding</h3>
+                <p className="text-xs text-gray-400 mt-1">Customer-wise outstanding and received amount</p>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={topCustomerOutstanding}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(v) => formatCurrency(v)} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                  <Bar dataKey="outstanding" fill="#dc2626" radius={[4, 4, 0, 0]} name="Outstanding" />
+                  <Bar dataKey="paid" fill="#15803d" radius={[4, 4, 0, 0]} name="Received" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-gray-900">Order Payment Status Mix</h3>
+                <p className="text-xs text-gray-400 mt-1">Distribution of customer order payment states</p>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={salesStatusChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={60}
+                    outerRadius={92}
+                    paddingAngle={3}
+                  >
+                    {salesStatusChartData.map((entry, index) => (
+                      <Cell key={entry.name} fill={SALES_CHART_COLORS[index % SALES_CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `${value} orders`} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap gap-3 mt-3">
+                {salesStatusChartData.map((entry, index) => (
+                  <div key={entry.name} className="inline-flex items-center gap-2 text-xs text-gray-600">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: SALES_CHART_COLORS[index % SALES_CHART_COLORS.length] }} />
+                    <span>{entry.name}: {entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-gray-900">Customer-wise Outstanding Summary</h3>
+              <span className="text-xs text-gray-400">{data.customers?.length || 0} customers</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Customer</th>
+                    <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Orders</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Total Value</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Paid</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Outstanding</th>
+                    <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">% Unpaid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!data.customers || data.customers.length===0 ? (
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-400 text-sm">No data available</td></tr>
+                  ) : data.customers.map(c=>(
+                    <tr key={c.customer?._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
+                      <td className="px-5 py-3.5">
+                        <div className="text-sm font-semibold text-gray-900">{c.customer?.name}</div>
+                        <div className="text-xs text-gray-400">{c.customer?.phone || '-'}</div>
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{c.orderCount || 0}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-gray-900 text-right">{formatCurrency(c.totalAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-green-600 text-right">{formatCurrency(c.paidAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-bold text-red-600 text-right">{formatCurrency(c.outstandingAmount)}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`text-xs font-medium ${c.totalAmount > 0 && (c.outstandingAmount/c.totalAmount) > 0.5 ? 'text-red-600' : 'text-yellow-600'}`}>
+                          {c.totalAmount > 0 ? ((c.outstandingAmount/c.totalAmount)*100).toFixed(0) : 0}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          {/* Sales Order Details with Invoice/PO */}
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-50">
+              <h3 className="text-sm font-bold text-gray-900">Sales Order Details (Individual Orders)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Order #</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Customer</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Date</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Invoice #</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">PO Number</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Total</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Received</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Outstanding</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(!data.customers || (data.customers.length === 0)) && (
+                    <tr><td colSpan={9} className="text-center py-12 text-gray-400 text-sm">No orders in selected period</td></tr>
+                  )}
+                  {salesOrderRows.map(o => (
+                    <tr key={o._id || o.orderNumber} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
+                      <td className="px-5 py-3.5 font-mono text-xs text-gray-600">{o.orderNumber}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[120px] truncate">{o.customerName}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500">{o.orderDate ? formatDate(o.orderDate) : '-'}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-600">{o.invoiceNumber || '-'}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-600 font-medium">{o.poNumber || '-'}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-gray-900 text-right">{formatCurrency(o.totalAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-green-600 text-right">{formatCurrency(o.paidAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-red-600 text-right">{formatCurrency(o.outstandingAmount)}</td>
+                      <td className="px-5 py-3.5"><Badge status={o.paymentStatus}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ── Purchase Report ── */}
       {tab==='purchases' && data && (
         <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <SummaryCard label="Total Purchases" value={formatCurrency(data.totalPurchases)} />
-            <SummaryCard label="Amount Paid" value={<span className="text-green-600">{formatCurrency(data.totalPaid)}</span>} />
-            <SummaryCard label="Outstanding" value={<span className="text-red-500">{formatCurrency(data.totalOutstanding)}</span>} />
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <SummaryCard label="Total Purchases" value={formatCurrency(data.totalPurchases || 0)} />
+            <SummaryCard label="Amount Paid" value={<span className="text-green-600">{formatCurrency(data.totalPaid || 0)}</span>} />
+            <SummaryCard label="Outstanding" value={<span className="text-red-500">{formatCurrency(data.totalOutstanding || 0)}</span>} />
+            <SummaryCard label="Total Vendors" value={data.vendors?.length || 0} />
           </div>
-          <TableWrapper headers={['Order #','Vendor','Date','Total','Paid','Outstanding','Status']}>
-            {data.orders.length===0&&<tr><td colSpan={7} className="text-center py-12 text-gray-400 text-sm">No orders in selected period</td></tr>}
-            {data.orders.map(o=>(
-              <tr key={o._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
-                <td className="px-5 py-3.5 font-mono text-xs text-gray-600">{o.orderNumber}</td>
-                <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[120px] truncate">{o.vendor?.name}</td>
-                <td className="px-5 py-3.5 text-xs text-gray-500">{formatDate(o.orderDate)}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-gray-900">{formatCurrency(o.totalAmount)}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-green-600">{formatCurrency(o.paidAmount)}</td>
-                <td className="px-5 py-3.5 text-sm font-medium text-red-600">{formatCurrency(o.outstandingAmount)}</td>
-                <td className="px-5 py-3.5"><Badge status={o.paymentStatus}/></td>
-              </tr>
-            ))}
-          </TableWrapper>
+          
+          {/* Download Button */}
+          <div className="flex justify-end">
+            <button onClick={downloadExcel} disabled={!data || !(data.vendors && data.vendors.length)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition disabled:opacity-50">
+              <Download size={14}/> Download Excel
+            </button>
+          </div>
+          
+          {/* Vendor-wise Summary with Analytics */}
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-50 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-gray-900">Vendor-wise Outstanding Summary</h3>
+              <span className="text-xs text-gray-400">{data.vendors?.length || 0} vendors</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Vendor</th>
+                    <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Orders</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Total Value</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Paid</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Outstanding</th>
+                    <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">% Unpaid</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!data.vendors || data.vendors.length===0 ? (
+                    <tr><td colSpan={6} className="text-center py-12 text-gray-400 text-sm">No data available</td></tr>
+                  ) : data.vendors.map(v=>(
+                    <tr key={v.vendor?._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
+                      <td className="px-5 py-3.5">
+                        <div className="text-sm font-semibold text-gray-900">{v.vendor?.name}</div>
+                        <div className="text-xs text-gray-400">{v.vendor?.phone || '-'}</div>
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">{v.orderCount || 0}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-gray-900 text-right">{formatCurrency(v.totalAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-green-600 text-right">{formatCurrency(v.paidAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-bold text-red-600 text-right">{formatCurrency(v.outstandingAmount)}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`text-xs font-medium ${v.totalAmount > 0 && (v.outstandingAmount/v.totalAmount) > 0.5 ? 'text-red-600' : 'text-yellow-600'}`}>
+                          {v.totalAmount > 0 ? ((v.outstandingAmount/v.totalAmount)*100).toFixed(0) : 0}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          {/* Purchase Order Details with Invoice/PO */}
+          <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-50">
+              <h3 className="text-sm font-bold text-gray-900">Purchase Order Details (Individual Orders)</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Order #</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Vendor</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Date</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Invoice #</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">PO Number</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Total</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Paid</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Outstanding</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(!data.vendors || (data.vendors.length === 0)) && (
+                    <tr><td colSpan={9} className="text-center py-12 text-gray-400 text-sm">No orders in selected period</td></tr>
+                  )}
+                  {data.vendors && data.vendors.flatMap(v => (v.orders || []).map(o => ({ ...o, vendorName: v.vendor?.name }))).map(o => (
+                    <tr key={o._id || o.orderNumber} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
+                      <td className="px-5 py-3.5 font-mono text-xs text-gray-600">{o.orderNumber}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[120px] truncate">{o.vendorName}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-500">{o.orderDate ? formatDate(o.orderDate) : '-'}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-600">{o.invoiceNumber || '-'}</td>
+                      <td className="px-5 py-3.5 text-xs text-gray-600 font-medium">{o.poNumber || '-'}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-gray-900 text-right">{formatCurrency(o.totalAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-green-600 text-right">{formatCurrency(o.paidAmount)}</td>
+                      <td className="px-5 py-3.5 text-sm font-medium text-red-600 text-right">{formatCurrency(o.outstandingAmount)}</td>
+                      <td className="px-5 py-3.5"><Badge status={o.paymentStatus}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 
