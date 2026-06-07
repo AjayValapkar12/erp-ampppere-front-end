@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { FileText, TrendingUp, TrendingDown, Users, Search, Download } from 'lucide-react';
+import { FileText, TrendingUp, TrendingDown, Users, Search, Download, Bell } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, CartesianGrid, XAxis, YAxis } from 'recharts';
 import api from '../utils/api';
 import { formatCurrency, formatDate, formatDateInput } from '../utils/format';
+import { useAuth } from '../context/AuthContext';
 
 const SALES_CHART_COLORS = ['#1f2937', '#0f766e', '#dc2626', '#d97706', '#2563eb', '#7c3aed'];
 
@@ -21,11 +22,14 @@ const SummaryCard = ({ icon: Icon, iconBg, iconColor, label, value, sub }) => (
 );
 
 export default function Reports() {
+  const { user } = useAuth();
   const [tab, setTab] = useState('pl');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [reminderStatus, setReminderStatus] = useState('');
 
   const salesOrderRows = data?.customers
     ? data.customers.flatMap(c =>
@@ -76,6 +80,7 @@ export default function Reports() {
 
   const fetchReport = async () => {
     setLoading(true); setData(null);
+    setReminderStatus('');
     try {
       let url = '';
       if (tab==='pl') url=`/reports/pl?startDate=${startDate}&endDate=${endDate}`;
@@ -86,6 +91,27 @@ export default function Reports() {
       setData(res.data.data);
     } catch(e){ console.error(e); }
     finally { setLoading(false); }
+  };
+
+  const sendReminder = async () => {
+    setSendingReminder(true);
+    setReminderStatus('');
+    try {
+      const res = await api.post('/reminders/outstanding/send');
+      const result = res.data?.data;
+
+      if (result?.success) {
+        setReminderStatus(`Reminder sent to ${result.recipient} for ${result.customerCount} customers.`);
+      } else if (result?.skipped) {
+        setReminderStatus(result.reason || 'Reminder skipped.');
+      } else {
+        setReminderStatus('Reminder request completed.');
+      }
+    } catch (e) {
+      setReminderStatus(e.response?.data?.message || 'Failed to send reminder.');
+    } finally {
+      setSendingReminder(false);
+    }
   };
 
   const downloadExcel = () => {
@@ -202,9 +228,20 @@ export default function Reports() {
       )}
 
       {tab==='outstanding' && !data && (
-        <button onClick={fetchReport} disabled={loading} className="inline-flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-700 transition disabled:opacity-60">
-          <Search size={14}/>{loading?'Loading...':'Load Outstanding Report'}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+          <button onClick={fetchReport} disabled={loading} className="inline-flex items-center gap-2 px-5 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-700 transition disabled:opacity-60">
+            <Search size={14}/>{loading?'Loading...':'Load Outstanding Report'}
+          </button>
+          {user?.role === 'admin' && (
+            <button
+              onClick={sendReminder}
+              disabled={sendingReminder}
+              className="inline-flex items-center gap-2 px-5 py-2 bg-orange-500 text-white text-sm font-semibold rounded-xl hover:bg-orange-600 transition disabled:opacity-60"
+            >
+              <Bell size={14}/>{sendingReminder ? 'Sending...' : 'Send Reminder'}
+            </button>
+          )}
+        </div>
       )}
 
       {/* ── P&L Report ── */}
@@ -504,9 +541,28 @@ export default function Reports() {
       {/* ── Outstanding Report ── */}
       {tab==='outstanding' && data && (
         <div className="space-y-5">
-          <div className="max-w-xs">
-            <SummaryCard icon={Users} iconBg="bg-orange-50" iconColor="text-orange-500" label="Total Receivables" value={<span className="text-red-600">{formatCurrency(data.total)}</span>} sub={`${data.customers.length} customers with outstanding`} />
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-xs">
+              <SummaryCard icon={Users} iconBg="bg-orange-50" iconColor="text-orange-500" label="Total Receivables" value={<span className="text-red-600">{formatCurrency(data.total)}</span>} sub={`${data.customers.length} customers with outstanding`} />
+            </div>
+            {user?.role === 'admin' && (
+              <div className="flex flex-col items-start gap-2">
+                <button
+                  onClick={sendReminder}
+                  disabled={sendingReminder}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition disabled:opacity-60"
+                >
+                  <Bell size={14}/>{sendingReminder ? 'Sending...' : 'Send Outstanding Reminder'}
+                </button>
+                <p className="text-xs text-gray-400">Sends email to the configured reminder inbox with customers having pending balance.</p>
+              </div>
+            )}
           </div>
+          {reminderStatus && (
+            <div className={`rounded-xl border px-4 py-3 text-sm ${reminderStatus.toLowerCase().includes('failed') || reminderStatus.toLowerCase().includes('only admin') ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+              {reminderStatus}
+            </div>
+          )}
           <TableWrapper headers={['Customer Name','Phone','Outstanding Amount']}>
             {data.customers.length===0&&<tr><td colSpan={3} className="text-center py-12 text-gray-400 text-sm">No outstanding receivables</td></tr>}
             {data.customers.map(c=>(

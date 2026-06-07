@@ -165,6 +165,8 @@ export default function Sales() {
 
   // ── Invoice map: { [orderId]: { invoiceNumber, poNumber } } ─────────────────
   const [invoicesMap, setInvoicesMap] = useState({});
+  const [sortBy, setSortBy] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
 
   const emptyForm = {
     customer: '', orderDate: formatDateInput(new Date()),
@@ -218,6 +220,49 @@ export default function Sales() {
     (invoicesMap[o._id]?.invoiceNumber || '').toLowerCase().includes(search.toLowerCase()) ||
     (invoicesMap[o._id]?.poNumber      || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleSort = (col) => {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir('asc'); }
+  };
+
+  const compareValues = (a, b, dir = 'asc') => {
+    if (a == null) a = '';
+    if (b == null) b = '';
+    if (typeof a === 'number' && typeof b === 'number') return dir === 'asc' ? a - b : b - a;
+    // try numeric compare for numeric strings
+    const na = parseFloat(a);
+    const nb = parseFloat(b);
+    if (!isNaN(na) && !isNaN(nb)) return dir === 'asc' ? na - nb : nb - na;
+    // fallback to string compare
+    return dir === 'asc' ? String(a).localeCompare(String(b)) : String(b).localeCompare(String(a));
+  };
+
+  const sorted = (() => {
+    if (!sortBy) return filtered;
+    const arr = [...filtered];
+    arr.sort((x, y) => {
+      const invX = invoicesMap[x._id] || {};
+      const invY = invoicesMap[y._id] || {};
+      switch (sortBy) {
+        case 'invoice': return compareValues(invX.invoiceNumber || '', invY.invoiceNumber || '', sortDir);
+        case 'po': return compareValues(invX.poNumber || '', invY.poNumber || '', sortDir);
+        case 'customer': return compareValues(x.customer?.name || '', y.customer?.name || '', sortDir);
+        case 'total': return compareValues(x.totalAmount || 0, y.totalAmount || 0, sortDir);
+        case 'paid': return compareValues(x.paidAmount || 0, y.paidAmount || 0, sortDir);
+        case 'outstanding': return compareValues(x.outstandingAmount || 0, y.outstandingAmount || 0, sortDir);
+        case 'payment': return compareValues(x.paymentStatus || '', y.paymentStatus || '', sortDir);
+        case 'delivery': {
+          const dx = (x.items?.filter(i => i.isDelivered).length || 0) / Math.max(1, (x.items?.length || 0));
+          const dy = (y.items?.filter(i => i.isDelivered).length || 0) / Math.max(1, (y.items?.length || 0));
+          return compareValues(dx, dy, sortDir);
+        }
+        case 'date': return compareValues(new Date(x.orderDate).getTime() || 0, new Date(y.orderDate).getTime() || 0, sortDir);
+        default: return 0;
+      }
+    });
+    return arr;
+  })();
 
   // ── Open helpers ────────────────────────────────────────────────────────────
 
@@ -407,18 +452,29 @@ export default function Sales() {
               <thead>
                 <tr className="border-b border-gray-100">
                   {[
-                    'Invoice #',
-                    'PO #',
-                    'Customer',
-                    'Total',
-                    'Paid',
-                    'Outstanding',
-                    'Payment',
-                    'Delivery',
-                    'Date',
-                    'Actions',
+                    { label: 'Invoice #', key: 'invoice' },
+                    { label: 'PO #', key: 'po' },
+                    { label: 'Customer', key: 'customer' },
+                    { label: 'Total', key: 'total' },
+                    { label: 'Paid', key: 'paid' },
+                    { label: 'Outstanding', key: 'outstanding' },
+                    { label: 'Payment', key: 'payment' },
+                    { label: 'Delivery', key: 'delivery' },
+                    { label: 'Date', key: 'date' },
+                    { label: 'Actions', key: 'actions' },
                   ].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                    <th
+                      key={h.label}
+                      onClick={() => h.key !== 'actions' && handleSort(h.key)}
+                      className={`px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap ${h.key !== 'actions' ? 'cursor-pointer select-none' : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{h.label}</span>
+                        {h.key !== 'actions' && (
+                          <span className="text-xs text-gray-400">{sortBy === h.key ? (sortDir === 'asc' ? '▲' : '▼') : '▵▿'}</span>
+                        )}
+                      </div>
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -429,7 +485,7 @@ export default function Sales() {
                 {!loading && filtered.length === 0 && (
                   <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">No orders found</td></tr>
                 )}
-                {filtered.map(order => {
+                {sorted.map(order => {
                   const deliveredCount = order.items?.filter(i => i.isDelivered).length || 0;
                   const totalItems     = order.items?.length || 0;
                   const inv            = invoicesMap[order._id];
@@ -438,7 +494,7 @@ export default function Sales() {
                     <tr key={order._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
 
                       {/* ── Invoice # ── */}
-                      <td className="px-5 py-3.5 whitespace-nowrap">
+                      <td className="px-3 py-3.5 w-28 whitespace-nowrap">
                         {inv?.invoiceNumber ? (
                           <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
                             {inv.invoiceNumber}
@@ -449,7 +505,7 @@ export default function Sales() {
                       </td>
 
                       {/* ── PO # ── */}
-                      <td className="px-5 py-3.5 whitespace-nowrap">
+                      <td className="px-3 py-3.5 w-28 whitespace-nowrap">
                         {inv?.poNumber && inv.poNumber !== '—' ? (
                           <span className="font-mono text-xs text-gray-700">
                             {inv.poNumber}
@@ -459,7 +515,14 @@ export default function Sales() {
                         )}
                       </td>
 
-                      <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[130px] truncate">{order.customer?.name}</td>
+                      <td className="px-5 py-3.5 text-sm text-gray-800">
+                        <div className="relative group max-w-[220px]">
+                          <div className="truncate" aria-hidden>{order.customer?.name}</div>
+                          <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 whitespace-nowrap bg-gray-900 text-white text-xs px-2 py-1 rounded shadow">
+                            {order.customer?.name}
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-5 py-3.5 text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
                       <td className="px-5 py-3.5 text-sm text-green-600 font-medium whitespace-nowrap">{formatCurrency(order.paidAmount)}</td>
                       <td className="px-5 py-3.5 text-sm text-red-600 font-medium whitespace-nowrap">{formatCurrency(order.outstandingAmount)}</td>
