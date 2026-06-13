@@ -16,4 +16,19 @@
   body {
     @apply font-sans antialiased text-gray-900;
   }
+
+  .responsive-table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .responsive-table th,
+  .responsive-table td {
+    word-break: normal;
+  }
+
+  .responsive-table td {
+    vertical-align: top;
+  }
 }

@@ -276,7 +276,7 @@ export default function Customers() {
 
           {/* Table */}
           <div className="overflow-x-auto -mx-5">
-            <table className="w-full min-w-[650px]">
+            <table className="w-full responsive-table">
               <thead>
                 <tr className="border-b border-gray-100">
                   {['Name','Phone','Contact Person','Outstanding','Actions'].map(h => (
@@ -430,7 +430,7 @@ export default function Customers() {
                   Loading ledger…
                 </div>
               ) : (
-                <table className="w-full min-w-[500px]">
+                <table className="w-full responsive-table">
                   <thead>
                     <tr className="border-b border-gray-100">
                       {['Order #','Date','Total','Paid','Outstanding','Status'].map(h => (

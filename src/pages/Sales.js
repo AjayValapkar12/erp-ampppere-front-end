@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ShoppingCart, Plus, Eye, Edit2, Trash2, CreditCard,
-  Search, X, FileText, CheckCircle, Circle,
+  Search, X, FileText, CheckCircle, Circle, Maximize2,
 } from 'lucide-react';
 import api from '../utils/api';
 import { formatCurrency, formatDate, formatDateInput } from '../utils/format';
@@ -160,6 +160,7 @@ export default function Sales() {
   const [payOrder, setPayOrder]                 = useState(null);
   const [invoiceOrder, setInvoiceOrder]         = useState(null);
   const [saving, setSaving]                     = useState(false);
+  const [fullWidthMode, setFullWidthMode]       = useState(false);
   const [error, setError]                       = useState('');
   const [togglingDelivery, setTogglingDelivery] = useState(null);
 
@@ -167,6 +168,8 @@ export default function Sales() {
   const [invoicesMap, setInvoicesMap] = useState({});
   const [sortBy, setSortBy] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
 
   const emptyForm = {
     customer: '', orderDate: formatDateInput(new Date()),
@@ -180,6 +183,28 @@ export default function Sales() {
     loadCustomers();
     loadInvoicesMap();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    if (!fullWidthMode) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setFullWidthMode(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [fullWidthMode]);
 
   const loadOrders = async () => {
     try {
@@ -263,6 +288,9 @@ export default function Sales() {
     });
     return arr;
   })();
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageData = sorted.slice((page - 1) * pageSize, page * pageSize);
 
   // ── Open helpers ────────────────────────────────────────────────────────────
 
@@ -411,19 +439,28 @@ export default function Sales() {
   const labelCls = "block text-xs font-semibold text-gray-600 mb-1.5";
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-2 ${fullWidthMode ? 'fixed inset-0 z-50 bg-white overflow-y-auto p-4 sm:p-6 lg:p-8' : ''}`}>
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Sales Management</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage sales orders, deliveries, and invoicing</p>
+          <h1 className="text-xl sm:text-xl font-bold text-gray-900">Sales Management</h1>
         </div>
-        <button
-          onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-700 transition flex-shrink-0"
-        >
-          <Plus size={16} /> Create Order
-        </button>
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => setFullWidthMode(v => !v)}
+            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-xl transition ${fullWidthMode ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          >
+            <Maximize2 size={14} />
+            {fullWidthMode ? 'Exit full screen' : 'Full screen'}
+          </button>
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-700 transition flex-shrink-0"
+          >
+            <Plus size={16} /> Create Order
+          </button>
+        </div>
       </div>
 
       {/* ── Orders Table Card ── */}
@@ -435,7 +472,7 @@ export default function Sales() {
             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{filtered.length}</span>
           </div>
         </div>
-        <div className="px-5 py-4">
+        <div className="px-5 py-2">
           <div className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 mb-4 focus-within:ring-2 focus-within:ring-gray-900 focus-within:bg-white transition">
             <Search size={15} className="text-gray-400 flex-shrink-0" />
             <input
@@ -448,12 +485,12 @@ export default function Sales() {
           </div>
 
           <div className="overflow-x-auto -mx-5">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full responsive-table">
               <thead>
                 <tr className="border-b border-gray-100">
                   {[
-                    { label: 'Invoice #', key: 'invoice' },
-                    { label: 'PO #', key: 'po' },
+                    { label: 'Invoice', key: 'invoice' },
+                    { label: 'PO', key: 'po' },
                     { label: 'Customer', key: 'customer' },
                     { label: 'Total', key: 'total' },
                     { label: 'Paid', key: 'paid' },
@@ -466,7 +503,7 @@ export default function Sales() {
                     <th
                       key={h.label}
                       onClick={() => h.key !== 'actions' && handleSort(h.key)}
-                      className={`px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap ${h.key !== 'actions' ? 'cursor-pointer select-none' : ''}`}
+                      className={`px-3 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap ${h.key !== 'actions' ? 'cursor-pointer select-none' : ''}`}
                     >
                       <div className="flex items-center gap-2">
                         <span>{h.label}</span>
@@ -485,7 +522,7 @@ export default function Sales() {
                 {!loading && filtered.length === 0 && (
                   <tr><td colSpan={10} className="text-center py-12 text-gray-400 text-sm">No orders found</td></tr>
                 )}
-                {sorted.map(order => {
+                {pageData.map(order => {
                   const deliveredCount = order.items?.filter(i => i.isDelivered).length || 0;
                   const totalItems     = order.items?.length || 0;
                   const inv            = invoicesMap[order._id];
@@ -494,7 +531,7 @@ export default function Sales() {
                     <tr key={order._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
 
                       {/* ── Invoice # ── */}
-                      <td className="px-3 py-3.5 w-28 whitespace-nowrap">
+                      <td className="px-1 py-3.5 w-16 whitespace-nowrap">
                         {inv?.invoiceNumber ? (
                           <span className="font-mono text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
                             {inv.invoiceNumber}
@@ -505,7 +542,7 @@ export default function Sales() {
                       </td>
 
                       {/* ── PO # ── */}
-                      <td className="px-3 py-3.5 w-28 whitespace-nowrap">
+                      <td className="px-2 py-3.5 w-28 whitespace-nowrap">
                         {inv?.poNumber && inv.poNumber !== '—' ? (
                           <span className="font-mono text-xs text-gray-700">
                             {inv.poNumber}
@@ -515,7 +552,7 @@ export default function Sales() {
                         )}
                       </td>
 
-                      <td className="px-5 py-3.5 text-sm text-gray-800">
+                      <td className="px-2 py-3.5 text-sm text-gray-800">
                         <div className="relative group max-w-[220px]">
                           <div className="truncate" aria-hidden>{order.customer?.name}</div>
                           <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 whitespace-nowrap bg-gray-900 text-white text-xs px-2 py-1 rounded shadow">
@@ -523,11 +560,11 @@ export default function Sales() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
-                      <td className="px-5 py-3.5 text-sm text-green-600 font-medium whitespace-nowrap">{formatCurrency(order.paidAmount)}</td>
-                      <td className="px-5 py-3.5 text-sm text-red-600 font-medium whitespace-nowrap">{formatCurrency(order.outstandingAmount)}</td>
-                      <td className="px-5 py-3.5"><Badge status={order.paymentStatus}/></td>
-                      <td className="px-5 py-3.5 whitespace-nowrap">
+                      <td className="px-2 py-3.5 text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(order.totalAmount)}</td>
+                      <td className="px-2 py-3.5 text-sm text-green-600 font-medium whitespace-nowrap">{formatCurrency(order.paidAmount)}</td>
+                      <td className="px-2 py-3.5 text-sm text-red-600 font-medium whitespace-nowrap">{formatCurrency(order.outstandingAmount)}</td>
+                      <td className="px-2 py-3.5"><Badge status={order.paymentStatus}/></td>
+                      <td className="px-2 py-3.5 whitespace-nowrap">
                         <span className={`text-xs font-medium ${
                           deliveredCount === totalItems && totalItems > 0
                             ? 'text-green-600'
@@ -536,8 +573,8 @@ export default function Sales() {
                           {deliveredCount}/{totalItems} delivered
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">{formatDate(order.orderDate)}</td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-2 py-3.5 text-xs text-gray-500 whitespace-nowrap">{formatDate(order.orderDate)}</td>
+                      <td className="px-2 py-3.5">
                         <div className="flex items-center gap-1">
                           <button title="View" onClick={() => openView(order)}
                             className="p-1.5 rounded-lg border border-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition">
@@ -571,6 +608,31 @@ export default function Sales() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4">
+            <div className="text-xs text-gray-500">
+              Showing {pageData.length === 0 ? 0 : (page - 1) * pageSize + 1} - {(page - 1) * pageSize + pageData.length} of {sorted.length} orders
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-1 text-xs text-gray-600">
+              <button
+                onClick={() => setPage(old => Math.max(1, old - 1))}
+                disabled={page === 1}
+                className="px-3 py-2 rounded-lg transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-300"
+              >
+                Previous
+              </button>
+              <span className="px-2">
+                Page {page} / {pageCount}
+              </span>
+              <button
+                onClick={() => setPage(old => Math.min(pageCount, old + 1))}
+                disabled={page === pageCount}
+                className="px-3 py-2 rounded-lg transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-300"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -625,7 +687,7 @@ export default function Sales() {
                 </div>
 
                 <div className="border border-gray-100 rounded-xl">
-                  <table className="w-full min-w-[720px]">
+                  <table className="w-full responsive-table">
                     <thead className="bg-gray-50">
                       <tr>
                         {['Description','HSN','Qty','Unit','Rate (₹)','GST %','Amount',''].map(h => (

@@ -225,7 +225,7 @@ export default function Purchasing() {
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
+            <table className="w-full responsive-table">
               <thead>
                 <tr className="border-b border-gray-100">
                   {['Name','Email','Phone','Outstanding','Status','Actions'].map(h => (
@@ -277,7 +277,7 @@ export default function Purchasing() {
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px]">
+            <table className="w-full responsive-table">
               <thead>
                 <tr className="border-b border-gray-100">
                   {['Order #','Vendor','Total','Paid','Outstanding','Status','Date','Actions'].map(h => (
@@ -381,7 +381,7 @@ export default function Purchasing() {
                   <button onClick={() => setOrderForm(f => ({...f, items:[...f.items, {...EMPTY_ITEM}]}))} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition"><Plus size={13}/>Add Item</button>
                 </div>
                 <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                  <table className="w-full min-w-[700px]">
+                  <table className="w-full responsive-table">
                     <thead className="bg-gray-50">
                       <tr>
                         {['Description','HSN','Qty','Unit','Rate (₹)','GST %','Amount',''].map(h => (
@@ -455,7 +455,7 @@ export default function Purchasing() {
                 <div><div className="text-xs text-gray-400 mb-0.5">Status</div><Badge status={viewOrder.paymentStatus}/></div>
               </div>
               <div className="overflow-x-auto border border-gray-100 rounded-xl mb-5">
-                <table className="w-full min-w-[500px]">
+                <table className="w-full responsive-table">
                   <thead className="bg-gray-50">
                     <tr>{['Description','Qty','Unit','Rate','GST','Amount'].map(h => <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 border-b border-gray-100">{h}</th>)}</tr>
                   </thead>

@@ -175,7 +175,7 @@ export default function Reports() {
   const TableWrapper = ({ headers, children }) => (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px]">
+        <table className="w-full responsive-table">
           <thead>
             <tr className="border-b border-gray-100">
               {headers.map(h=><th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">{h}</th>)}
@@ -349,7 +349,7 @@ export default function Reports() {
               <span className="text-xs text-gray-400">{data.customers?.length || 0} customers</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px]">
+              <table className="w-full responsive-table">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Customer</th>
@@ -393,7 +393,7 @@ export default function Reports() {
               <h3 className="text-sm font-bold text-gray-900">Sales Order Details (Individual Orders)</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full responsive-table">
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Order #</th>
@@ -456,7 +456,7 @@ export default function Reports() {
               <span className="text-xs text-gray-400">{data.vendors?.length || 0} vendors</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px]">
+              <table className="w-full responsive-table">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Vendor</th>
@@ -500,7 +500,7 @@ export default function Reports() {
               <h3 className="text-sm font-bold text-gray-900">Purchase Order Details (Individual Orders)</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full responsive-table">
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide whitespace-nowrap">Order #</th>
