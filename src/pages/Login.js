@@ -113,7 +113,7 @@ export default function Login() {
           </form>
 
           {/* Default credentials hint */}
-          <div className="mt-5 p-4 bg-blue-50 rounded-xl border border-blue-100">
+          {/* <div className="mt-5 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <p className="text-xs font-semibold text-blue-700 mb-1.5">Default Credentials</p>
             <div className="flex flex-col gap-1">
               <div className="flex gap-2 text-xs text-blue-600">
@@ -125,7 +125,7 @@ export default function Login() {
                 <code className="font-mono">Admin@1234</code>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
