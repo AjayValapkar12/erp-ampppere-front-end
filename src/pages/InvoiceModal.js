@@ -633,7 +633,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                           ))}
                           <tr style={{ background:'#ececec' }}>
                             <td style={{ border:'1px solid #555', padding:'4px 6px', fontWeight:'bold', fontSize:10 }}>Invoice Total</td>
-                            <td style={{ border:'1px solid #555', padding:'4px 6px', fontWeight:'bold', fontSize:14, textAlign:'right' }}>{n0(invoice.totalAmount)}</td>
+                            <td style={{ border:'1px solid #555', padding:'4px 6px', fontWeight:'bold', fontSize:14, textAlign:'right' }}>{Math.round(Number(invoice.totalAmount || 0)).toFixed(2)}</td>
                           </tr>
                           <tr>
                             <td colSpan={2} style={{ border:'1px solid #555', padding:'16px 6px', textAlign:'center', fontSize:8, color:'#888' }}>Electronic Reference Number</td>
