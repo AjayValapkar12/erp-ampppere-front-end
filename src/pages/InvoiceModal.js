@@ -5,6 +5,7 @@ import api from '../utils/api';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const n2 = v => Number(v || 0).toFixed(2);
+const n0 = v => Number(v || 0).toFixed(0);
 const fmtINR = v => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function toWords(amount) {
@@ -19,7 +20,7 @@ function toWords(amount) {
     if (n < 10000000) return convert(Math.floor(n/100000)) + ' Lakh' + (n%100000 ? ' '+convert(n%100000) : '');
     return convert(Math.floor(n/10000000)) + ' Crore' + (n%10000000 ? ' '+convert(n%10000000) : '');
   };
-  const num = Math.floor(Number(amount || 0));
+  const num = Math.round(Number(amount || 0));
   return num === 0 ? 'Zero Only.' : convert(num).trim() + ' Only.';
 }
 
@@ -172,7 +173,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
     });
     const subtotal = items.reduce((s,i) => s + (i.taxableValue||0), 0);
     const totalGst = items.reduce((s,i) => s + i.cgstAmount + i.sgstAmount + i.igstAmount, 0);
-    return { ...inv, items, subtotal, totalGst, totalAmount: subtotal + totalGst };
+    return { ...inv, items, subtotal, totalGst, totalAmount: Math.round(subtotal + totalGst) };
   }, []);
 
   const setF = useCallback((path, value) => {
@@ -248,10 +249,14 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
       <title></title>
       <style>
         *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:Arial,sans-serif;font-size:9px;color:#000;background:#fff}
+        body{font-family:Arial,sans-serif;font-size:12px;color:#000;background:#fff;line-height:1.4}
+        body *{font-size:10px !important;line-height:1.4 !important}
         .wrap{padding:8mm 10mm}
         table{border-collapse:collapse;width:100%}
-        th,td{border:1px solid #555;padding:2px 4px;font-size:8.5px}
+        th,td{border:1px solid #555;padding:5px 7px;font-size:12px !important}
+        th{font-size:10px !important}
+        ol, ul{margin:0 0 0 16px; padding:0}
+        li{font-size:12px !important; margin-bottom:4px}
         input,textarea,select{display:none!important}
         @page{size:A4;margin:0mm;}
         @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
@@ -628,7 +633,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                           ))}
                           <tr style={{ background:'#ececec' }}>
                             <td style={{ border:'1px solid #555', padding:'4px 6px', fontWeight:'bold', fontSize:10 }}>Invoice Total</td>
-                            <td style={{ border:'1px solid #555', padding:'4px 6px', fontWeight:'bold', fontSize:14, textAlign:'right' }}>{n2(invoice.totalAmount)}</td>
+                            <td style={{ border:'1px solid #555', padding:'4px 6px', fontWeight:'bold', fontSize:14, textAlign:'right' }}>{n0(invoice.totalAmount)}</td>
                           </tr>
                           <tr>
                             <td colSpan={2} style={{ border:'1px solid #555', padding:'16px 6px', textAlign:'center', fontSize:8, color:'#888' }}>Electronic Reference Number</td>

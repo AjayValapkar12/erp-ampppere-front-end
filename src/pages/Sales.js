@@ -173,7 +173,7 @@ export default function Sales() {
 
   const emptyForm = {
     customer: '', orderDate: formatDateInput(new Date()),
-    deliveryDate: '', notes: '', items: [{ ...EMPTY_ITEM }],
+    poNumber: '', notes: '', items: [{ ...EMPTY_ITEM }],
   };
   const [form, setForm]       = useState(emptyForm);
   const [payForm, setPayForm] = useState({ amount: '', paymentMethod: 'bank_transfer', transactionId: '', notes: '' });
@@ -243,7 +243,7 @@ export default function Sales() {
     o.orderNumber?.toLowerCase().includes(search.toLowerCase()) ||
     o.customer?.name?.toLowerCase().includes(search.toLowerCase()) ||
     (invoicesMap[o._id]?.invoiceNumber || '').toLowerCase().includes(search.toLowerCase()) ||
-    (invoicesMap[o._id]?.poNumber      || '').toLowerCase().includes(search.toLowerCase())
+    ((invoicesMap[o._id]?.poNumber || o.poNumber || '')).toLowerCase().includes(search.toLowerCase())
   );
 
   const handleSort = (col) => {
@@ -271,7 +271,7 @@ export default function Sales() {
       const invY = invoicesMap[y._id] || {};
       switch (sortBy) {
         case 'invoice': return compareValues(invX.invoiceNumber || '', invY.invoiceNumber || '', sortDir);
-        case 'po': return compareValues(invX.poNumber || '', invY.poNumber || '', sortDir);
+        case 'po': return compareValues(invX.poNumber || x.poNumber || '', invY.poNumber || y.poNumber || '', sortDir);
         case 'customer': return compareValues(x.customer?.name || '', y.customer?.name || '', sortDir);
         case 'total': return compareValues(x.totalAmount || 0, y.totalAmount || 0, sortDir);
         case 'paid': return compareValues(x.paidAmount || 0, y.paidAmount || 0, sortDir);
@@ -304,11 +304,11 @@ export default function Sales() {
   const openEdit = (order) => {
     setEditOrder(order);
     setForm({
-      customer:     order.customer?._id || order.customer,
-      orderDate:    formatDateInput(order.orderDate),
-      deliveryDate: formatDateInput(order.deliveryDate),
-      notes:        order.notes || '',
-      items:        order.items.map(i => ({ ...i })),
+      customer: order.customer?._id || order.customer,
+      orderDate: formatDateInput(order.orderDate),
+      poNumber: order.poNumber || '',
+      notes: order.notes || '',
+      items: order.items.map(i => ({ ...i })),
     });
     setError('');
     setShowModal(true);
@@ -526,6 +526,9 @@ export default function Sales() {
                   const deliveredCount = order.items?.filter(i => i.isDelivered).length || 0;
                   const totalItems     = order.items?.length || 0;
                   const inv            = invoicesMap[order._id];
+                  const displayedPoNumber = inv?.poNumber && inv.poNumber !== '—'
+                    ? inv.poNumber
+                    : order.poNumber || '';
 
                   return (
                     <tr key={order._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
@@ -543,9 +546,9 @@ export default function Sales() {
 
                       {/* ── PO # ── */}
                       <td className="px-2 py-3.5 w-28 whitespace-nowrap">
-                        {inv?.poNumber && inv.poNumber !== '—' ? (
+                        {displayedPoNumber ? (
                           <span className="font-mono text-xs text-gray-700">
-                            {inv.poNumber}
+                            {displayedPoNumber}
                           </span>
                         ) : (
                           <span className="text-gray-300 text-xs">—</span>
@@ -668,8 +671,8 @@ export default function Sales() {
                   <input type="date" className={inputCls} value={form.orderDate} onChange={e => setForm(f => ({ ...f, orderDate: e.target.value }))}/>
                 </div>
                 <div>
-                  <label className={labelCls}>Delivery Date</label>
-                  <input type="date" className={inputCls} value={form.deliveryDate} onChange={e => setForm(f => ({ ...f, deliveryDate: e.target.value }))}/>
+                  <label className={labelCls}>PO Number</label>
+                  <input type="text" className={inputCls} value={form.poNumber} placeholder="Optional" onChange={e => setForm(f => ({ ...f, poNumber: e.target.value }))}/>
                 </div>
                 <div>
                   <label className={labelCls}>Notes</label>
