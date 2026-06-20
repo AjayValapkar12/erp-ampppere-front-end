@@ -94,9 +94,10 @@ export default function Purchasing() {
 
   const outstandingForTarget = () => {
     if (!payTarget) return 0;
-    return payTarget.type === 'order'
+    const outstanding = payTarget.type === 'order'
       ? payTarget.data.outstandingAmount
       : payTarget.data.outstandingBalance;
+    return Math.round(outstanding);
   };
 
   // ── Item helpers ──────────────────────────────────────────────
@@ -110,9 +111,13 @@ export default function Purchasing() {
     let sub = 0, gst = 0;
     orderForm.items.forEach(i => {
       const a = (parseFloat(i.quantity)||0) * (parseFloat(i.rate)||0);
-      sub += a; gst += a * (parseFloat(i.gstRate)||0) / 100;
+      sub += a;
+      gst += a * (parseFloat(i.gstRate)||0) / 100;
     });
-    return { subtotal: sub, totalGst: gst, total: sub + gst };
+    const subtotal = parseFloat(sub.toFixed(2));
+    const totalGst = parseFloat(gst.toFixed(2));
+    const total = Math.round(subtotal + totalGst);
+    return { subtotal, totalGst, total };
   };
 
   // ── Save vendor ───────────────────────────────────────────────
@@ -241,7 +246,7 @@ export default function Purchasing() {
                     <td className="px-5 py-3.5 text-sm font-semibold text-gray-900">{v.name}</td>
                     <td className="px-5 py-3.5 text-sm text-gray-600">{v.email || <span className="text-gray-300">—</span>}</td>
                     <td className="px-5 py-3.5 text-sm text-gray-600">{v.phone || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-5 py-3.5 text-sm font-medium text-red-600">{formatCurrency(v.outstandingBalance)}</td>
+                    <td className="px-5 py-3.5 text-sm font-medium text-red-600">{formatCurrency(Math.round(v.outstandingBalance))}</td>
                     <td className="px-5 py-3.5"><Badge status={v.status}/></td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
@@ -291,9 +296,9 @@ export default function Purchasing() {
                   <tr key={o._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
                     <td className="px-5 py-3.5 font-mono text-xs text-gray-600">{o.orderNumber}</td>
                     <td className="px-5 py-3.5 text-sm text-gray-800 max-w-[130px] truncate">{o.vendor?.name}</td>
-                    <td className="px-5 py-3.5 text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(o.totalAmount)}</td>
-                    <td className="px-5 py-3.5 text-sm text-green-600 font-medium whitespace-nowrap">{formatCurrency(o.paidAmount)}</td>
-                    <td className="px-5 py-3.5 text-sm text-red-600 font-medium whitespace-nowrap">{formatCurrency(o.outstandingAmount)}</td>
+                    <td className="px-5 py-3.5 text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(Math.round(o.totalAmount))}</td>
+                    <td className="px-5 py-3.5 text-sm text-green-600 font-medium whitespace-nowrap">{formatCurrency(Math.round(o.paidAmount))}</td>
+                    <td className="px-5 py-3.5 text-sm text-red-600 font-medium whitespace-nowrap">{formatCurrency(Math.round(o.outstandingAmount))}</td>
                     <td className="px-5 py-3.5"><Badge status={o.paymentStatus}/></td>
                     <td className="px-5 py-3.5 text-xs text-gray-500 whitespace-nowrap">{formatDate(o.orderDate)}</td>
                     <td className="px-5 py-3.5">
@@ -409,7 +414,7 @@ export default function Purchasing() {
                                 {[0,5,12,18,28].map(r => <option key={r} value={r}>{r}%</option>)}
                               </select>
                             </td>
-                            <td className="px-2 py-2"><input className={`${inputCls} bg-gray-100 cursor-not-allowed`} value={formatCurrency(amt+gst)} disabled/></td>
+                            <td className="px-2 py-2"><input className={`${inputCls} bg-gray-100 cursor-not-allowed`} value={formatCurrency(Math.round(amt+gst))} disabled/></td>
                             <td className="px-2 py-2">
                               {orderForm.items.length > 1 && (
                                 <button onClick={() => setOrderForm(f => ({...f, items:f.items.filter((_,i) => i!==idx)}))} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"><X size={14}/></button>
@@ -467,7 +472,7 @@ export default function Purchasing() {
                         <td className="px-4 py-3 text-sm text-gray-700">{item.unit}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{formatCurrency(item.rate)}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{item.gstRate}%</td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(item.amount + item.gstAmount)}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(Math.round(item.amount + item.gstAmount))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -475,11 +480,11 @@ export default function Purchasing() {
               </div>
               <div className="flex justify-end">
                 <div className="bg-gray-50 rounded-xl p-4 min-w-[220px] space-y-2">
-                  <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{formatCurrency(viewOrder.subtotal)}</span></div>
-                  <div className="flex justify-between text-sm text-gray-600"><span>GST</span><span>{formatCurrency(viewOrder.totalGst)}</span></div>
-                  <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2"><span>Total</span><span>{formatCurrency(viewOrder.totalAmount)}</span></div>
-                  <div className="flex justify-between text-sm text-green-600 font-medium"><span>Paid</span><span>{formatCurrency(viewOrder.paidAmount)}</span></div>
-                  <div className="flex justify-between text-sm text-red-600 font-medium"><span>Outstanding</span><span>{formatCurrency(viewOrder.outstandingAmount)}</span></div>
+                  <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{formatCurrency(Math.round(viewOrder.subtotal))}</span></div>
+                  <div className="flex justify-between text-sm text-gray-600"><span>GST</span><span>{formatCurrency(Math.round(viewOrder.totalGst))}</span></div>
+                  <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2"><span>Total</span><span>{formatCurrency(Math.round(viewOrder.totalAmount))}</span></div>
+                  <div className="flex justify-between text-sm text-green-600 font-medium"><span>Paid</span><span>{formatCurrency(Math.round(viewOrder.paidAmount))}</span></div>
+                  <div className="flex justify-between text-sm text-red-600 font-medium"><span>Outstanding</span><span>{formatCurrency(Math.round(viewOrder.outstandingAmount))}</span></div>
                 </div>
               </div>
             </div>
@@ -510,7 +515,7 @@ export default function Purchasing() {
               {error && <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">{error}</div>}
               <div className="p-4 bg-red-50 rounded-xl border border-red-100">
                 <div className="text-xs text-red-500 mb-1">Outstanding Balance</div>
-                <div className="text-2xl font-bold text-red-600">{formatCurrency(outstandingForTarget())}</div>
+                <div className="text-2xl font-bold text-red-600">{formatCurrency(Math.round(outstandingForTarget()))}</div>
               </div>
               <div>
                 <label className={labelCls}>Amount *</label>
@@ -518,8 +523,8 @@ export default function Purchasing() {
                   type="number" className={inputCls}
                   value={payForm.amount}
                   onChange={e => setPayForm(f => ({...f, amount:e.target.value}))}
-                  max={outstandingForTarget()}
-                  placeholder={`Max ${formatCurrency(outstandingForTarget())}`}
+                  max={Math.round(outstandingForTarget())}
+                  placeholder={`Max ${formatCurrency(Math.round(outstandingForTarget()))}`}
                 />
               </div>
               <div>
