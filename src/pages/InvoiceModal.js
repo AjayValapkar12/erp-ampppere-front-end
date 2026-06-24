@@ -255,6 +255,8 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
         table{border-collapse:collapse;width:100%}
         th,td{border:1px solid #555;padding:5px 7px;font-size:12px !important}
         th{font-size:10px !important}
+        h1{font-size:36px !important}
+        h2{font-size:16px !important}
         ol, ul{margin:0 0 0 16px; padding:0}
         li{font-size:12px !important; margin-bottom:4px}
         input,textarea,select{display:none!important}
@@ -300,7 +302,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
 
   // ── Invoice render ───────────────────────────────────────────────────────────
   const mh = invoice.saleWithinMaharashtra;
-  const totalQty = (invoice.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+  const totalQty = (invoice.items || []).filter(i => (i.uom || 'METER') === 'METER').reduce((s, i) => s + (i.quantity || 0), 0);
   const cgstTotal = (invoice.items || []).reduce((s, i) => s + (i.cgstAmount || 0), 0);
   const sgstTotal = (invoice.items || []).reduce((s, i) => s + (i.sgstAmount || 0), 0);
   const igstTotal = (invoice.items || []).reduce((s, i) => s + (i.igstAmount || 0), 0);
@@ -362,13 +364,13 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                 <tbody><tr>
                   <td style={{ border: 'none', verticalAlign: 'top' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
-                      <img src="/assets/amp-logo.png" alt="AMP company logo" style={{ height: 42, width: 'auto', objectFit: 'contain', display: 'block' }} />
-                      <div>
-                        <div style={{ fontSize: 32, fontWeight: 900, color: '#cc0000', letterSpacing: 0.5, lineHeight: 1 }}>
-                          AMPPERE CABLE
+                      <img src="/assets/amp-logo.png" alt="AMP company logo" style={{ height: 90, width: 'auto', objectFit: 'contain', display: 'block' }} />
+                      <div style={{ display: 'grid', gap: 1 }}>
+                        <div>
+                         <h1  style={{ fontSize: 48, fontWeight: 900, color: '#cc0000', letterSpacing: 0.5, lineHeight: 1 }}> AMPPERE CABLE</h1>
                         </div>
-                        <div style={{ fontSize: 12, fontStyle: 'italic', fontWeight: 700, color: '#333', marginTop: 1 }}>
-                          Where Quality Meets Reliability
+                        <div>    
+                         <h2 style={{ fontSize: 18, fontStyle: 'italic', fontWeight: 700, color: '#333', marginTop: 0, lineHeight: 1 }}>  Where Quality Meets Reliability</h2>            
                         </div>
                       </div>
                     </div>
