@@ -117,6 +117,13 @@ export default function Customers() {
     }
   };
 
+  const ledgerRows = ledgerData.reduce((acc, row) => {
+    const delta = (row.debit || 0) - (row.credit || 0);
+    const runningBalance = acc.length ? acc[acc.length - 1].runningBalance + delta : delta;
+    acc.push({ ...row, runningBalance });
+    return acc;
+  }, []);
+
   const openPay = (c) => {
     setPayCustomer(c);
     setPayForm({ amount: '', paymentMethod: 'bank_transfer', transactionId: '', notes: '' });
@@ -433,23 +440,26 @@ export default function Customers() {
                 <table className="w-full responsive-table">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      {['Order #','Date','Total','Paid','Outstanding','Status'].map(h => (
+                      {['Date','Reference','Description','Account','Payment Method','Transaction ID','Debit','Credit','Running Balance'].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {ledgerData.length === 0 && (
-                      <tr><td colSpan={6} className="text-center py-10 text-gray-400 text-sm">No transactions found</td></tr>
+                    {ledgerRows.length === 0 && (
+                      <tr><td colSpan={9} className="text-center py-10 text-gray-400 text-sm">No transactions found</td></tr>
                     )}
-                    {ledgerData.map(o => (
-                      <tr key={o._id} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{o.orderNumber}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{formatDate(o.orderDate)}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatCurrency(o.totalAmount)}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-green-600">{formatCurrency(o.paidAmount)}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-red-600">{formatCurrency(o.outstandingAmount)}</td>
-                        <td className="px-4 py-3"><Badge status={o.paymentStatus}/></td>
+                    {ledgerRows.map(row => (
+                      <tr key={`${row._id}-${row.date}`} className="border-b border-gray-50 hover:bg-gray-50 transition last:border-0">
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(row.date)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{row.referenceNumber || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{row.description || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{row.account?.code ? `${row.account.code} · ${row.account.name}` : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{row.paymentMethod || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">{row.transactionId || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-green-700">{row.debit ? formatCurrency(row.debit) : '-'}</td>
+                        <td className="px-4 py-3 text-sm text-red-700">{row.credit ? formatCurrency(row.credit) : '-'}</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">{formatCurrency(row.runningBalance)}</td>
                       </tr>
                     ))}
                   </tbody>

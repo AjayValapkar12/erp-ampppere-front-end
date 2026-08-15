@@ -8,6 +8,8 @@ import Sales from './pages/Sales';
 import Customers from './pages/Customers';
 import Purchasing from './pages/Purchasing';
 import Reports from './pages/Reports';
+import Ledger from './pages/Ledger';
+import PaymentLedger from './pages/PaymentLedger';
 
 const PrivateRoute = ({ children }) => {
   const { user } = useAuth();
@@ -29,6 +31,8 @@ function AppRoutes() {
         <Route path="customers" element={<Customers />} />
         <Route path="purchasing" element={<Purchasing />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="ledger" element={<Ledger />} />
+        <Route path="payment-ledger" element={<PaymentLedger />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

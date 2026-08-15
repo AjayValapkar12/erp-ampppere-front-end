@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Users, Truck, FileText, Bell, User, LogOut, Menu, X, ChevronsLeft, ChevronsRight, Maximize2, Minimize2 } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Truck, FileText, Bell, User, LogOut, Menu, X, ChevronsLeft, ChevronsRight, Maximize2, Minimize2, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
@@ -9,6 +9,7 @@ const navItems = [
   { path: '/customers', label: 'Customers', icon: Users },
   { path: '/purchasing', label: 'Purchasing', icon: Truck },
   { path: '/reports', label: 'Reports', icon: FileText },
+  { path: '/payment-ledger', label: 'Payment Ledger', icon: BookOpen },
 ];
 
 export default function Layout() {

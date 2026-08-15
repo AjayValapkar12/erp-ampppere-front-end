@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Truck, Plus, Edit2, Trash2, CreditCard, Eye, X } from 'lucide-react';
+import { Truck, Plus, Edit2, Trash2, CreditCard, Eye, X, RotateCcw } from 'lucide-react';
 import api from '../utils/api';
 import { formatCurrency, formatDate, formatDateInput } from '../utils/format';
 
@@ -141,6 +141,9 @@ export default function Purchasing() {
   const [editOrder, setEditOrder] = useState(null);
   const [viewOrder, setViewOrder] = useState(null);
 
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+
   // Payment state — payTarget can be a PurchaseOrder or a Vendor
   const [payTarget, setPayTarget] = useState(null);   // { type: 'order'|'vendor', data: {...} }
 
@@ -193,8 +196,51 @@ export default function Purchasing() {
     setError(''); setShowOrderModal(true);
   };
   const openView = async (o) => {
-    const res = await api.get(`/purchases/${o._id}`);
-    setViewOrder(res.data.data); setShowViewModal(true);
+    try {
+      const res = await api.get(`/purchases/${o._id}`);
+      setViewOrder(res.data.data);
+      setShowViewModal(true);
+      await loadOrderPayments(o._id);
+    } catch (e) {
+      console.error('Failed to load order details', e);
+      alert('Failed to load order details');
+    }
+  };
+
+  const loadOrderPayments = async (orderId) => {
+    setPaymentsLoading(true);
+    try {
+      const res = await api.get('/payments', {
+        params: {
+          reference: orderId,
+          referenceModel: 'PurchaseOrder',
+          reversed: false,
+        },
+      });
+      setPayments(res.data.data || []);
+    } catch (e) {
+      console.error('Failed to load payments', e);
+      setPayments([]);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  const handleReversePayment = async (paymentId) => {
+    if (!window.confirm('Reverse this payment? This will undo the posted payment.')) return;
+    setSaving(true);
+    try {
+      await api.post(`/payments/${paymentId}/reverse`);
+      await loadOrders();
+      await loadVendors();
+      if (viewOrder) {
+        await openView(viewOrder);
+      }
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed to reverse payment');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Unified Pay modal ─────────────────────────────────────────
@@ -768,6 +814,49 @@ export default function Purchasing() {
                   <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2"><span>Total</span><span>{formatCurrency(Math.round(viewOrder.totalAmount))}</span></div>
                   <div className="flex justify-between text-sm text-green-600 font-medium"><span>Paid</span><span>{formatCurrency(Math.round(viewOrder.paidAmount))}</span></div>
                   <div className="flex justify-between text-sm text-red-600 font-medium"><span>Outstanding</span><span>{formatCurrency(Math.round(viewOrder.outstandingAmount))}</span></div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Payment history</div>
+                    <div className="text-sm font-semibold text-gray-900">{payments.length} recorded payment{payments.length === 1 ? '' : 's'}</div>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full responsive-table">
+                    <thead>
+                      <tr className="bg-white">
+                        {['Date', 'Amount', 'Method', 'Notes', 'Action'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paymentsLoading ? (
+                        <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">Loading payments…</td></tr>
+                      ) : payments.length === 0 ? (
+                        <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">No payments recorded yet.</td></tr>
+                      ) : payments.map(payment => (
+                        <tr key={payment._id} className="border-t border-gray-100 hover:bg-gray-50 transition">
+                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(payment.paymentDate)}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{formatCurrency(payment.amount)}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{payment.paymentMethod}</td>
+                          <td className="px-3 py-3 text-sm text-gray-700">{payment.notes || '—'}</td>
+                          <td className="px-3 py-3 text-sm">
+                            <button
+                              onClick={() => handleReversePayment(payment._id)}
+                              disabled={saving}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                            >
+                              <RotateCcw size={14}/> Reverse
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
