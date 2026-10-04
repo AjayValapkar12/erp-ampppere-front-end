@@ -6,6 +6,7 @@ import api from '../utils/api';
 
 const n2 = v => Number(v || 0).toFixed(2);
 const n0 = v => Number(v || 0).toFixed(0);
+const roundMoney = v => Math.round((Number(v || 0) + Number.EPSILON) * 100) / 100;
 const fmtINR = v => '₹' + Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function toWords(amount) {
@@ -20,8 +21,12 @@ function toWords(amount) {
     if (n < 10000000) return convert(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 ? ' ' + convert(n % 100000) : '');
     return convert(Math.floor(n / 10000000)) + ' Crore' + (n % 10000000 ? ' ' + convert(n % 10000000) : '');
   };
-  const num = Math.round(Number(amount || 0));
-  return num === 0 ? 'Zero Only.' : convert(num).trim() + ' Only.';
+  const totalPaise = Math.round(Number(amount || 0) * 100);
+  const rupees = Math.floor(totalPaise / 100);
+  const paise = totalPaise % 100;
+  const rupeeWords = rupees === 0 ? 'Zero' : convert(rupees).trim();
+  const paiseWords = paise ? ` and ${convert(paise)} Paise` : '';
+  return `${rupeeWords}${paiseWords} Only.`;
 }
 
 const dtFmt = d => {
@@ -38,12 +43,13 @@ const getFY = d => {
 
 // ─── Editable field components — defined OUTSIDE main component ───────────────
 
-const EF = ({ val, onChange, editMode, type = 'text', w, style = {} }) => {
+const EF = ({ val, onChange, editMode, type = 'text', step, w, style = {} }) => {
   if (!editMode) return <span style={style}>{val || ''}</span>;
   return (
     <input
       type={type}
-      value={val || ''}
+      step={step}
+      value={val ?? ''}
       onChange={e => onChange(e.target.value)}
       style={{
         border: '1px solid #4285f4', borderRadius: 2, padding: '1px 3px',
@@ -173,7 +179,10 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
     });
     const subtotal = items.reduce((s, i) => s + (i.taxableValue || 0), 0);
     const totalGst = items.reduce((s, i) => s + i.cgstAmount + i.sgstAmount + i.igstAmount, 0);
-    return { ...inv, items, subtotal, totalGst, totalAmount: Math.round(subtotal + totalGst) };
+    const totalAmount = inv.totalAmountOverride !== '' && inv.totalAmountOverride != null
+      ? Number(inv.totalAmountOverride)
+      : Math.round(subtotal + totalGst);
+    return { ...inv, items, subtotal, totalGst, totalAmount };
   }, []);
 
   const setF = useCallback((path, value) => {
@@ -183,7 +192,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
       let obj = u;
       for (let i = 0; i < keys.length - 1; i++) obj = obj[keys[i]];
       obj[keys[keys.length - 1]] = value;
-      return path === 'saleWithinMaharashtra' ? recalc(u) : u;
+      return ['saleWithinMaharashtra', 'totalAmountOverride'].includes(path) ? recalc(u) : u;
     });
   }, [recalc]);
 
@@ -683,7 +692,20 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                           ))}
                           <tr style={{ background: '#ececec' }}>
                             <td style={{ border: '1px solid #555', padding: '4px 6px', fontWeight: 'bold', fontSize: 10 }}>Invoice Total</td>
-                            <td style={{ border: '1px solid #555', padding: '4px 6px', fontWeight: 'bold', fontSize: 14, textAlign: 'right' }}>{Math.round(Number(invoice.totalAmount || 0)).toFixed(2)}</td>
+                            <td style={{ border: '1px solid #555', padding: '4px 6px', fontWeight: 'bold', fontSize: 14, textAlign: 'right' }}>
+                              {em ? (
+                                <EF
+                                  val={invoice.totalAmountOverride ?? invoice.totalAmount}
+                                  onChange={v => setF('totalAmountOverride', v)}
+                                  editMode={em}
+                                  type="number"
+                                  step="0.01"
+                                  w={90}
+                                  style={{ textAlign: 'right', fontSize: 13 }}
+                                />
+                              ) : n2(invoice.totalAmount)}
+                              {em && <div style={{ fontSize: 7, fontWeight: 400, color: '#666' }}>Rounded by default; enter an exact amount or clear to restore rounded total</div>}
+                            </td>
                           </tr>
                           <tr>
                             <td colSpan={2} style={{ border: '1px solid #555', padding: '16px 6px', textAlign: 'center', fontSize: 8, color: '#888' }}>Electronic Reference Number</td>
@@ -725,7 +747,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
         {/* ── Footer ── */}
         <div style={{ padding: '10px 18px', borderTop: '1px solid #e0e0e0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8f8f8', borderRadius: '0 0 10px 10px', flexShrink: 0 }}>
           <div style={{ fontSize: 11, color: '#e65100', maxWidth: 520 }}>
-            {em && '⚠️ Changing price/qty of delivered items will recalculate the Sales Order total & customer balance on save.'}
+            {em && '⚠️ Invoice total is rounded by default. Enter an exact amount if needed; clear the field to restore the rounded total. Changes sync to the Sales Order & customer balance on save.'}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={onClose} style={btnSec}>Close</button>

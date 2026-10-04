@@ -158,6 +158,8 @@ export default function Sales() {
   const [editOrder, setEditOrder]               = useState(null);
   const [viewOrder, setViewOrder]               = useState(null);
   const [payments, setPayments]                 = useState([]);
+  const [paymentHistoryGap, setPaymentHistoryGap] = useState(0);
+  const [paymentHistoryError, setPaymentHistoryError] = useState('');
   const [paymentsLoading, setPaymentsLoading]   = useState(false);
   const [payOrder, setPayOrder]                 = useState(null);
   const [invoiceOrder, setInvoiceOrder]         = useState(null);
@@ -327,20 +329,43 @@ export default function Sales() {
 
   const loadOrderPayments = async (orderId) => {
     setPaymentsLoading(true);
+    setPaymentHistoryError('');
     try {
-      const res = await api.get('/payments', {
-        params: {
-          reference: orderId,
-          referenceModel: 'SalesOrder',
-          reversed: false,
-        },
-      });
-      setPayments(res.data.data || []);
+      const res = await api.get(`/sales/${orderId}/payment-history`);
+      setPayments(res.data.data?.payments || []);
+      setPaymentHistoryGap(Number(res.data.data?.untrackedAmount || 0));
     } catch (e) {
       console.error('Failed to load payments', e);
-      setPayments([]);
+      setPaymentHistoryError(e.response?.data?.message || 'Could not load payment history. Please retry.');
     } finally {
       setPaymentsLoading(false);
+    }
+  };
+
+  const handleReverseUntrackedPayment = async () => {
+    if (!viewOrder || paymentHistoryGap <= 0) return;
+    const confirmed = window.confirm(
+      `${formatCurrency(paymentHistoryGap)} is included in this order's paid balance, but has no matching receipt record. Continue to recover the history entry and reverse this amount?`
+    );
+    if (!confirmed) return;
+
+    const method = window.prompt(
+      'The original method was not saved. Enter the original method: cash, bank_transfer, cheque, or upi.',
+      'bank_transfer'
+    );
+    if (!method) return;
+
+    setSaving(true);
+    try {
+      await api.post(`/sales/${viewOrder._id}/payment-history/reverse-untracked`, {
+        paymentMethod: method.trim().toLowerCase(),
+      });
+      await loadOrders();
+      await openView(viewOrder);
+    } catch (e) {
+      setPaymentHistoryError(e.response?.data?.message || 'Failed to recover and reverse the untracked payment.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -862,43 +887,84 @@ export default function Sales() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-xs text-gray-500 uppercase tracking-wide">Payment history</div>
-                    <div className="text-sm font-semibold text-gray-900">{payments.length} recorded payment{payments.length === 1 ? '' : 's'}</div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      {payments.length + (paymentHistoryGap > 0 ? 1 : 0)} payment{payments.length + (paymentHistoryGap > 0 ? 1 : 0) === 1 ? '' : 's'}
+                    </div>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full responsive-table">
-                    <thead>
-                      <tr className="bg-white">
-                        {['Date', 'Amount', 'Method', 'Notes', 'Action'].map(h => (
-                          <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paymentsLoading ? (
-                        <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">Loading payments…</td></tr>
-                      ) : payments.length === 0 ? (
-                        <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">No payments recorded yet.</td></tr>
-                      ) : payments.map(payment => (
-                        <tr key={payment._id} className="border-t border-gray-100 hover:bg-gray-50 transition">
-                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{formatDate(payment.paymentDate)}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{formatCurrency(payment.amount)}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-nowrap">{payment.paymentMethod}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700">{payment.notes || '—'}</td>
-                          <td className="px-3 py-3 text-sm">
-                            <button
-                              onClick={() => handleReversePayment(payment._id)}
-                              disabled={saving}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
-                            >
-                              <RotateCcw size={14}/> Reverse
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {paymentHistoryError && (
+                  <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    {paymentHistoryError}
+                    <button onClick={() => loadOrderPayments(viewOrder._id)} className="ml-2 font-semibold underline">Retry</button>
+                  </div>
+                )}
+                {paymentsLoading ? (
+                  <div className="py-8 text-center text-sm text-gray-400">Loading payments…</div>
+                ) : payments.length === 0 && paymentHistoryGap <= 0 ? (
+                  <div className="py-8 text-center text-sm text-gray-400">No payments recorded yet.</div>
+                ) : (
+                  <div className="space-y-2" aria-label="Recorded payments">
+                    {paymentHistoryGap > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_2fr_auto] gap-x-4 gap-y-2 items-center rounded-lg border border-amber-300 bg-amber-50 p-3">
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Date</div>
+                          <div className="text-sm font-medium text-gray-800">Not available</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Amount</div>
+                          <div className="text-sm font-semibold text-gray-900">{formatCurrency(paymentHistoryGap)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Method</div>
+                          <div className="text-sm text-gray-700">Not recorded</div>
+                        </div>
+                        <div className="col-span-2 md:col-span-1">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Status</div>
+                          <div className="text-sm text-amber-900">Paid balance has no matching receipt record.</div>
+                        </div>
+                        <div className="col-span-2 md:col-span-1 md:justify-self-end">
+                          <button
+                            onClick={handleReverseUntrackedPayment}
+                            disabled={saving}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                          >
+                            <RotateCcw size={14}/> Recover &amp; reverse
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {payments.map((payment, index) => (
+                      <div key={payment._id || `${payment.paymentDate || payment.createdAt}-${index}`}
+                        className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_2fr_auto] gap-x-4 gap-y-2 items-center rounded-lg border border-gray-200 bg-white p-3">
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Date</div>
+                          <div className="text-sm font-medium text-gray-800">{formatDate(payment.paymentDate || payment.createdAt)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Amount</div>
+                          <div className="text-sm font-semibold text-gray-900">{formatCurrency(payment.amount)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Method</div>
+                          <div className="text-sm text-gray-700">{(payment.paymentMethod || '—').replace(/_/g, ' ')}</div>
+                        </div>
+                        <div className="col-span-2 md:col-span-1">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Notes</div>
+                          <div className="text-sm text-gray-700 break-words">{payment.notes || '—'}</div>
+                        </div>
+                        <div className="col-span-2 md:col-span-1 md:justify-self-end">
+                          <button
+                            onClick={() => handleReversePayment(payment._id)}
+                            disabled={saving || !payment._id}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                          >
+                            <RotateCcw size={14}/> Reverse
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Items &amp; Delivery Status</h3>
