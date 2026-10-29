@@ -131,7 +131,7 @@ const btnSec = { padding: '8px 18px', border: '1px solid #ccc', borderRadius: 8,
 export default function InvoiceModal({ order, onClose, onSaved }) {
   const [invoice, setInvoice] = useState(null);
   const [origInvoice, setOrigInvoice] = useState(null);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -165,17 +165,19 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
   const recalc = useCallback((inv) => {
     const mh = inv.saleWithinMaharashtra;
     const items = (inv.items || []).map(item => {
-      const totalValue = (item.quantity || 0) * (item.rate || 0);
-      const discount = item.discount || 0;
+      const totalValue = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
+      const discount = parseFloat(item.discount) || 0;
       const taxableValue = totalValue - discount;
-      const gstRate = item.gstRate || 18;
+      const gstRate = (item.gstRate !== undefined && item.gstRate !== null && item.gstRate !== '' && !isNaN(parseFloat(item.gstRate)))
+        ? parseFloat(item.gstRate)
+        : 18;
       const cgstRate = mh ? gstRate / 2 : 0;
       const sgstRate = mh ? gstRate / 2 : 0;
       const igstRate = mh ? 0 : gstRate;
       const cgstAmount = mh ? (taxableValue * cgstRate) / 100 : 0;
       const sgstAmount = mh ? (taxableValue * sgstRate) / 100 : 0;
       const igstAmount = !mh ? (taxableValue * igstRate) / 100 : 0;
-      return { ...item, totalValue, taxableValue, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount };
+      return { ...item, gstRate, totalValue, taxableValue, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount };
     });
     const subtotal = items.reduce((s, i) => s + (i.taxableValue || 0), 0);
     const totalGst = items.reduce((s, i) => s + i.cgstAmount + i.sgstAmount + i.igstAmount, 0);
@@ -199,9 +201,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
   const setItem = useCallback((idx, field, value) => {
     setInvoice(prev => {
       const u = JSON.parse(JSON.stringify(prev));
-      u.items[idx][field] = ['quantity', 'rate', 'discount', 'gstRate'].includes(field)
-        ? (parseFloat(value) || 0)
-        : value;
+      u.items[idx][field] = value;
       return recalc(u);
     });
   }, [recalc]);
@@ -253,9 +253,23 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
   };
 
   const handlePrint = () => {
+    if (printRef.current) {
+      const inputs = printRef.current.querySelectorAll('input, textarea, select');
+      inputs.forEach(el => {
+        if (el.tagName === 'SELECT') {
+          Array.from(el.options).forEach(opt => {
+            opt.selected ? opt.setAttribute('selected', 'selected') : opt.removeAttribute('selected');
+          });
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+          el.checked ? el.setAttribute('checked', 'checked') : el.removeAttribute('checked');
+        } else {
+          el.setAttribute('value', el.value);
+        }
+      });
+    }
     const win = window.open('', '_blank');
     win.document.write(`<!DOCTYPE html><html><head>
-      <title></title>
+      <title>${invoice?.invoiceTitle || 'Invoice'} - ${invoice?.invoiceNumber || ''}</title>
       <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;font-size:12px;color:#000;background:#fff;line-height:1.4}
@@ -268,7 +282,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
         h2{font-size:16px !important}
         ol, ul{margin:0 0 0 16px; padding:0}
         li{font-size:12px !important; margin-bottom:4px}
-        input,textarea,select{display:none!important}
+        input,textarea,select{border:none!important;background:transparent!important;outline:none!important;box-shadow:none!important;font-family:inherit!important;font-size:inherit!important;color:inherit!important;display:inline-block!important;padding:0!important;margin:0!important}
         @page{size:A4;margin:0mm;}
         @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
       </style>
@@ -325,7 +339,7 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
         {/* ── Toolbar ── */}
         <div style={{ padding: '10px 18px', borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8f8f8', borderRadius: '10px 10px 0 0', flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>GST Tax Invoice — AMPPERE CABLE</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{invoice.invoiceTitle || 'GST Tax Invoice'} — AMPPERE CABLE</div>
             <div style={{ fontSize: 11, color: '#888' }}>
               {invoice.items?.length} item(s) · Only delivered items are invoiced · Rate/qty edits sync back to Sales Order on save
             </div>
@@ -407,7 +421,36 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                 <tbody>
                   <tr>
                     <td colSpan={2} style={{ border: '1px solid #555', textAlign: 'center', fontWeight: 'bold', fontSize: 12, padding: '4px 0', background: '#f0f0f0' }}>
-                      GST TAX INVOICE
+                      {em ? (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center', width: '100%' }}>
+                          <input
+                            type="text"
+                            value={invoice.invoiceTitle ?? 'GST TAX INVOICE'}
+                            onChange={e => setF('invoiceTitle', e.target.value)}
+                            list="invoice-title-presets"
+                            style={{
+                              textAlign: 'center',
+                              fontWeight: 'bold',
+                              fontSize: 12,
+                              border: '1px solid #4285f4',
+                              borderRadius: 4,
+                              padding: '2px 8px',
+                              background: '#fffde7',
+                              width: '55%',
+                              letterSpacing: 0.5
+                            }}
+                          />
+                          <datalist id="invoice-title-presets">
+                            <option value="GST TAX INVOICE" />
+                            <option value="PROFORMA INVOICE" />
+                            <option value="TAX INVOICE" />
+                            <option value="COMMERCIAL INVOICE" />
+                            <option value="EXPORT INVOICE" />
+                          </datalist>
+                        </div>
+                      ) : (
+                        <span style={{ letterSpacing: 0.5 }}>{invoice.invoiceTitle || 'GST TAX INVOICE'}</span>
+                      )}
                     </td>
                   </tr>
                   <tr>
@@ -566,11 +609,81 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                         <ENum val={item.discount || 0} onChange={v => setItem(idx, 'discount', v)} editMode={em} w={40} />
                       </td>
                       <td style={{ ...TD, fontWeight: 600 }}>{n2(item.taxableValue)}</td>
-                      <td style={{ ...TD, background: !mh ? '#f0fff4' : '#fafafa', color: !mh ? '#000' : '#bbb' }}>{!mh ? `${item.igstRate}%` : ''}</td>
+                      <td style={{ ...TD, background: !mh ? '#f0fff4' : '#fafafa', color: !mh ? '#000' : '#bbb' }}>
+                        {!mh ? (
+                          em ? (
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={item.gstRate ?? 18}
+                              onChange={e => setItem(idx, 'gstRate', e.target.value)}
+                              list="invoice-gst-rates"
+                              style={{
+                                width: 44,
+                                border: '1px solid #4285f4',
+                                borderRadius: 2,
+                                padding: '1px 2px',
+                                fontSize: 8,
+                                background: '#fffde7',
+                                textAlign: 'center'
+                              }}
+                            />
+                          ) : `${item.igstRate}%`
+                        ) : ''}
+                      </td>
                       <td style={{ ...TD, background: !mh ? '#f0fff4' : '#fafafa', color: !mh ? '#000' : '#bbb', fontWeight: !mh ? 600 : 400 }}>{!mh ? n2(item.igstAmount) : ''}</td>
-                      <td style={{ ...TD, background: mh ? '#f0f8ff' : '#fafafa', color: mh ? '#000' : '#bbb' }}>{mh ? `${item.cgstRate}%` : ''}</td>
+                      <td style={{ ...TD, background: mh ? '#f0f8ff' : '#fafafa', color: mh ? '#000' : '#bbb' }}>
+                        {mh ? (
+                          em ? (
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={item.cgstRate ?? ((item.gstRate != null ? item.gstRate : 18) / 2)}
+                              onChange={e => {
+                                const half = parseFloat(e.target.value) || 0;
+                                setItem(idx, 'gstRate', half * 2);
+                              }}
+                              style={{
+                                width: 44,
+                                border: '1px solid #4285f4',
+                                borderRadius: 2,
+                                padding: '1px 2px',
+                                fontSize: 8,
+                                background: '#fffde7',
+                                textAlign: 'center'
+                              }}
+                            />
+                          ) : `${item.cgstRate}%`
+                        ) : ''}
+                      </td>
                       <td style={{ ...TD, background: mh ? '#f0f8ff' : '#fafafa', color: mh ? '#000' : '#bbb', fontWeight: mh ? 600 : 400 }}>{mh ? n2(item.cgstAmount) : ''}</td>
-                      <td style={{ ...TD, background: mh ? '#f0f8ff' : '#fafafa', color: mh ? '#000' : '#bbb' }}>{mh ? `${item.sgstRate}%` : ''}</td>
+                      <td style={{ ...TD, background: mh ? '#f0f8ff' : '#fafafa', color: mh ? '#000' : '#bbb' }}>
+                        {mh ? (
+                          em ? (
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={item.sgstRate ?? ((item.gstRate != null ? item.gstRate : 18) / 2)}
+                              onChange={e => {
+                                const half = parseFloat(e.target.value) || 0;
+                                setItem(idx, 'gstRate', half * 2);
+                              }}
+                              style={{
+                                width: 44,
+                                border: '1px solid #4285f4',
+                                borderRadius: 2,
+                                padding: '1px 2px',
+                                fontSize: 8,
+                                background: '#fffde7',
+                                textAlign: 'center'
+                              }}
+                            />
+                          ) : `${item.sgstRate}%`
+                        ) : ''}
+                      </td>
                       <td style={{ ...TD, background: mh ? '#f0f8ff' : '#fafafa', color: mh ? '#000' : '#bbb', fontWeight: mh ? 600 : 400 }}>{mh ? n2(item.sgstAmount) : ''}</td>
                     </tr>
                   ))}
@@ -582,15 +695,30 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                     </td>
                     <td style={TD} /><td style={TD} /><td style={TD} /><td style={TD} />
                     <td style={{ ...TD, fontWeight: 'bold', fontSize: 9.5 }}>{n2(invoice.subtotal)}</td>
-                    <td style={{ ...TD, background: !mh ? '#c3e6cb' : '#fafafa' }}>{!mh ? '18%' : ''}</td>
+                    <td style={{ ...TD, background: !mh ? '#c3e6cb' : '#fafafa' }}>
+                      {!mh ? `${invoice.items?.[0]?.igstRate ?? 18}%` : ''}
+                    </td>
                     <td style={{ ...TD, background: !mh ? '#c3e6cb' : '#fafafa', fontWeight: 'bold' }}>{!mh ? n2(igstTotal) : ''}</td>
-                    <td style={{ ...TD, background: mh ? '#b8daff' : '#fafafa' }}>{mh ? '9%' : ''}</td>
+                    <td style={{ ...TD, background: mh ? '#b8daff' : '#fafafa' }}>
+                      {mh ? `${invoice.items?.[0]?.cgstRate ?? 9}%` : ''}
+                    </td>
                     <td style={{ ...TD, background: mh ? '#b8daff' : '#fafafa', fontWeight: 'bold' }}>{mh ? n2(cgstTotal) : ''}</td>
-                    <td style={{ ...TD, background: mh ? '#b8daff' : '#fafafa' }}>{mh ? '9%' : ''}</td>
+                    <td style={{ ...TD, background: mh ? '#b8daff' : '#fafafa' }}>
+                      {mh ? `${invoice.items?.[0]?.sgstRate ?? 9}%` : ''}
+                    </td>
                     <td style={{ ...TD, background: mh ? '#b8daff' : '#fafafa', fontWeight: 'bold' }}>{mh ? n2(sgstTotal) : ''}</td>
                   </tr>
                 </tbody>
               </table>
+              <datalist id="invoice-gst-rates">
+                <option value="18" />
+                <option value="12" />
+                <option value="5" />
+                <option value="0.1" />
+                <option value="0.05" />
+                <option value="0" />
+                <option value="28" />
+              </datalist>
 
               {/* ===== BOTTOM ===== */}
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -694,17 +822,27 @@ export default function InvoiceModal({ order, onClose, onSaved }) {
                             <td style={{ border: '1px solid #555', padding: '4px 6px', fontWeight: 'bold', fontSize: 10 }}>Invoice Total</td>
                             <td style={{ border: '1px solid #555', padding: '4px 6px', fontWeight: 'bold', fontSize: 14, textAlign: 'right' }}>
                               {em ? (
-                                <EF
-                                  val={invoice.totalAmountOverride ?? invoice.totalAmount}
-                                  onChange={v => setF('totalAmountOverride', v)}
-                                  editMode={em}
-                                  type="number"
-                                  step="0.01"
-                                  w={90}
-                                  style={{ textAlign: 'right', fontSize: 13 }}
-                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={invoice.totalAmountOverride ?? invoice.totalAmount}
+                                    onChange={e => setF('totalAmountOverride', e.target.value)}
+                                    placeholder="Total Amount"
+                                    style={{
+                                      width: 110,
+                                      border: '1px solid #4285f4',
+                                      borderRadius: 4,
+                                      padding: '2px 4px',
+                                      fontSize: 13,
+                                      fontWeight: 'bold',
+                                      background: '#fffde7',
+                                      textAlign: 'right'
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 7, fontWeight: 400, color: '#666' }}>Editable total amount</span>
+                                </div>
                               ) : n2(invoice.totalAmount)}
-                              {em && <div style={{ fontSize: 7, fontWeight: 400, color: '#666' }}>Rounded by default; enter an exact amount or clear to restore rounded total</div>}
                             </td>
                           </tr>
                           <tr>

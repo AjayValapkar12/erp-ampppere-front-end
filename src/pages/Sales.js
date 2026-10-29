@@ -435,7 +435,8 @@ export default function Sales() {
     form.items.forEach(i => {
       const a = (parseFloat(i.quantity) || 0) * (parseFloat(i.rate) || 0);
       sub += a;
-      gst += (a * (parseFloat(i.gstRate) || 0)) / 100;
+      const r = (i.gstRate !== '' && i.gstRate !== null && !isNaN(parseFloat(i.gstRate))) ? parseFloat(i.gstRate) : 0;
+      gst += (a * r) / 100;
     });
     return { subtotal: sub, totalGst: gst, total: sub + gst };
   };
@@ -764,7 +765,8 @@ export default function Sales() {
                     <tbody>
                       {form.items.map((item, idx) => {
                         const amt = (parseFloat(item.quantity) || 0) * (parseFloat(item.rate) || 0);
-                        const gst = (amt * (parseFloat(item.gstRate) || 0)) / 100;
+                        const r = (item.gstRate !== '' && item.gstRate !== null && !isNaN(parseFloat(item.gstRate))) ? parseFloat(item.gstRate) : 0;
+                        const gst = (amt * r) / 100;
                         return (
                           <tr key={idx} className="border-b border-gray-50 last:border-0 z-50">
                             <td className="px-2 py-2 min-w-[200px] z-40">
@@ -793,9 +795,16 @@ export default function Sales() {
                                 value={item.rate} onChange={e => updateItem(idx, 'rate', e.target.value)}/>
                             </td>
                             <td className="px-2 py-2 w-24">
-                              <select className={inputCls} value={item.gstRate} onChange={e => updateItem(idx, 'gstRate', e.target.value)}>
-                                {[0,5,12,18,28].map(r => <option key={r} value={r}>{r}%</option>)}
-                              </select>
+                              <input
+                                className={inputCls}
+                                type="number"
+                                step="any"
+                                min="0"
+                                placeholder="18"
+                                value={item.gstRate ?? 18}
+                                onChange={e => updateItem(idx, 'gstRate', e.target.value)}
+                                list="gst-rate-presets"
+                              />
                             </td>
                             <td className="px-2 py-2 w-32">
                               <input className={`${inputCls} bg-gray-100 cursor-not-allowed`}
@@ -814,6 +823,15 @@ export default function Sales() {
                       })}
                     </tbody>
                   </table>
+                  <datalist id="gst-rate-presets">
+                    <option value="18">18% (Standard)</option>
+                    <option value="12">12%</option>
+                    <option value="5">5%</option>
+                    <option value="0.1">0.1% (Export / Concessional)</option>
+                    <option value="0.05">0.05%</option>
+                    <option value="0">0% (Nil)</option>
+                    <option value="28">28%</option>
+                  </datalist>
                 </div>
               </div>
 
